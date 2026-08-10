@@ -38,10 +38,15 @@ def _params(doc):
     return flat_params(vals)
 
 
-def _check(got, expected, context):
+def _check(got, expected, context, tol=1e-9):
     scale = max(1.0, np.abs(expected).max())
-    np.testing.assert_allclose(got, expected, rtol=1e-9, atol=1e-9 * scale,
+    np.testing.assert_allclose(got, expected, rtol=tol, atol=tol * scale,
                                err_msg=context)
+
+
+#: statedot output blocks in S.flat() order.
+BLOCKS = {"xdot": slice(0, 3), "vdot": slice(3, 6), "qdot_wxyz": slice(6, 10),
+          "wdot": slice(10, 13), "Wdot": slice(13, 13 + N)}
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
@@ -51,6 +56,8 @@ def test_golden(path):
     f = statedot_fn(doc.get("motor_model", "first_order"))
     kind = doc["kind"]
     lim = doc["params"]["limits"]
+    tol = doc.get("tolerance", 1e-9)
+    compare = doc.get("compare", list(BLOCKS))
 
     for k, c in enumerate(doc["cases"]):
         s = _flat_state(c)
@@ -59,9 +66,10 @@ def test_golden(path):
         ctx = f"{path.stem} case {k}"
 
         if kind == "statedot":
-            expected = np.concatenate([e["xdot"], e["vdot"], e["qdot_wxyz"], e["wdot"],
-                                       e["Wdot"]])
-            _check(f(s, u, p), expected, ctx)
+            out = f(s, u, p)
+            for block in compare:
+                _check(out[BLOCKS[block]], np.asarray(e[block], float),
+                       f"{ctx} [{block}]", tol)
             continue
 
         dt = doc["dt"]

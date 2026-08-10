@@ -29,7 +29,8 @@ def body_wrench(w: sp.Matrix, W: sp.Matrix, v_a: sp.Matrix, p) -> tuple:
     W_bar = sum(W) / n
     factor = rotor_aero.aoa_thrust_factor(v_a, W_bar, p.r_prop, p.k_angle, p.k_hor)
 
-    F = rotor_aero.parasitic_drag(v_a, p.c_D) + rotor_aero.vertical_climb_drag(v_a, p.k_v2)
+    F = rotor_aero.parasitic_drag(v_a, p.c_D) + rotor_aero.linear_drag(v_a, p.c_L) \
+        + rotor_aero.vertical_climb_drag(v_a, p.k_v2)
     M = sp.zeros(3, 1)
     for i in range(n):
         v_i = rotor_aero.local_airspeed(v_a, w, p.rotor_pos[i])

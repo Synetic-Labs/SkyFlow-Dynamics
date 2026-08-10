@@ -26,6 +26,7 @@ DIM_PARAM = (
     + [(0, 0, 1), (0, 0, -1), (0, 0, 0), (0, 0, -1), (0, 0, 0)]  # tau_m, ka1, ka2, kd1, kd2
     + [(2, 1, 0)]                              # I_rot
     + [(-1, 1, 0)] * 3                         # c_D  (kg/m)
+    + [(0, 1, -1)] * 3                         # c_L  (kg/s)
     + [(0, 1, 0), (0, 1, 0)]                   # k_d, k_z  (kg)
     + [(1, 1, 0)]                              # k_flap (kg·m)
     + [(-1, 1, 0)]                             # k_h (kg/m)
@@ -42,7 +43,8 @@ def _scale(dims, lL, lM, lT):
 def _everything_on(motor_model):
     kw = dict(ct0=[1e-4] * 4, ct1=[1e-6] * 4,
               cq0=[1e-6] * 4, cq1=[1e-8] * 4,
-              c_D=[0.02, 0.03, 0.05], k_flap=1.5e-7, I_rot=3.452e-8,
+              c_D=[0.02, 0.03, 0.05], c_L=[0.01, 0.012, 0.008],
+              k_flap=1.5e-7, I_rot=3.452e-8,
               k_h=0.0, k_angle=3.145, k_hor=7.245, k_v2=1e-4)
     if motor_model == "asymmetric":
         kw.update(ka1=13.996, ka2=1.1e-4, kd1=5.933, kd2=3.2e-4)

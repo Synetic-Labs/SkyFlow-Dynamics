@@ -109,6 +109,21 @@ def parasitic_drag(v_a: sp.Matrix, c_D: sp.Matrix) -> sp.Matrix:
     return -speed * sp.Matrix([[c_D[0], 0, 0], [0, c_D[1], 0], [0, 0, c_D[2]]]) * v_a
 
 
+def linear_drag(v_a: sp.Matrix, c_L: sp.Matrix) -> sp.Matrix:
+    """
+    Lumped linear body-frame drag at the CoM (N):
+        F = −diag(c_Lx, c_Ly, c_Lz) · v_a,     c_L ≥ 0 in N/(m/s)
+    The rotor-drag model of Faessler, Franchi, Scaramuzza (RA-L 2018): in the world frame
+    F_W = −R·diag(c_L)·Rᵀ·(v − v_wind), which is what makes quadrotor dynamics with rotor drag
+    differentially flat. Crazyflow's first-principles model uses exactly this (their stored
+    drag_matrix is the NEGATED diagonal: drag_matrix = −diag(c_L)). It is the Ω-independent
+    lumping of the per-rotor H-force −Ω·K·v_i summed over rotors at nominal speed
+    (c_L ≈ k_d·ΣΩ_hover in-plane); identify a vehicle against ONE of the two forms, not both.
+    Sources: Faessler et al. RA-L 2018; crazyflow first_principles/dynamics.py:127.
+    """
+    return -sp.Matrix([[c_L[0], 0, 0], [0, c_L[1], 0], [0, 0, c_L[2]]]) * v_a
+
+
 def vertical_climb_drag(v_a: sp.Matrix, k_v2: sp.Expr) -> sp.Matrix:
     """
     Collective vertical airspeed-squared thrust term at the CoM, body ẑ (N):

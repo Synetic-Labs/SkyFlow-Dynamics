@@ -34,6 +34,7 @@ SCHEMA = {
     "kd2":     ("1/rad",         "asymmetric motor: spin-down quadratic coefficient"),
     "I_rot":   ("kg*m^2",        "rotor spin-axis moment of inertia (per rotor)"),
     "c_D":     ("N/(m/s)^2 (3,)", "parasitic drag diagonal (c_Dx, c_Dy, c_Dz)"),
+    "c_L":     ("N/(m/s) (3,)",  "lumped linear body-frame drag diagonal (Faessler rotor-drag form)"),
     "k_d":     ("kg/rad",        "rotor in-plane drag (H-force) coefficient"),
     "k_z":     ("kg/rad",        "rotor axial induced-inflow coefficient"),
     "k_flap":  ("kg*m/rad",      "blade-flapping moment coefficient"),
@@ -76,6 +77,7 @@ def substitution(p: Params, values: dict) -> dict:
             sub[p.inertia[a, b]] = I[a][b]
     for k in range(3):
         sub[p.c_D[k]] = values["c_D"][k]
+        sub[p.c_L[k]] = values["c_L"][k]
     for i in range(n):
         sub[p.spin[i]] = values["spin"][i]
         for k in range(3):
@@ -106,6 +108,7 @@ CRAZYFLIE = {
     "tau_m": 0.072, "ka1": 0.0, "ka2": 0.0, "kd1": 0.0, "kd2": 0.0,
     "I_rot": 0.0,
     "c_D": [0.0, 0.0, 0.0],
+    "c_L": [0.0, 0.0, 0.0],
     "k_d": 1.02506e-6, "k_z": 7.553e-7, "k_flap": 0.0, "k_h": 0.0,
     "k_angle": 0.0, "k_hor": 0.0, "k_v2": 0.0, "r_prop": 0.0225,
     # Harness-side operating limits (not part of the continuous dynamics):

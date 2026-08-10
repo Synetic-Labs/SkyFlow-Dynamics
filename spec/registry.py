@@ -56,6 +56,9 @@ SOURCES = {s.key: s for s in [
     Source("graf", "Graf — Quaternions and Dynamics (quaternion kinematics)"),
     Source("eschmann2024", "Eschmann et al. — Data-Driven System Identification of Quadrotors "
            "Subject to Motor Delays, 2024 (arXiv:2404.07837)"),
+    Source("faessler2018", "Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor "
+           "Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, "
+           "IEEE RA-L 2018"),
 ]}
 
 
@@ -151,6 +154,12 @@ TERMS = (
          "−k_v2·v_az·|v_az|·ẑ collective at CoM",
          "spec.rotor_aero.vertical_climb_drag", ("skydreamer",), ("k_v2",),
          ("properties/test_golden.py",)),
+    Term("linear_drag", "verified", "frame_aero",
+         "Lumped linear body-frame drag F = −diag(c_L)·v_a (Faessler differential-flatness form)",
+         "spec.rotor_aero.linear_drag", ("faessler2018", "crazyflow"), ("c_L",),
+         ("properties/test_energy.py", "properties/test_golden.py"),
+         "Ω-independent lumping of the per-rotor H-force; identify against c_L OR k_d, "
+         "not both. Crazyflow stores the negated diagonal (drag_matrix = −diag(c_L))."),
     Term("parasitic_drag", "verified", "frame_aero",
          "D = −‖v_a‖·diag(c_D)·v_a at CoM",
          "spec.rotor_aero.parasitic_drag", ("rotorpy",), ("c_D",),

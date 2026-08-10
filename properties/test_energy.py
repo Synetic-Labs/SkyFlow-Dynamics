@@ -19,6 +19,13 @@ def test_parasitic_drag_power_nonpositive_symbolic():
     assert sp.simplify(power + speed * quad) == 0
 
 
+def test_linear_drag_power_nonpositive_symbolic():
+    va = sp.Matrix(sp.symbols("va_1 va_2 va_3", real=True))
+    cL = sp.Matrix(sp.symbols("cL_1 cL_2 cL_3", nonnegative=True))
+    power = (rotor_aero.linear_drag(va, cL).T * va)[0, 0]
+    assert sp.simplify(power + cL[0]*va[0]**2 + cL[1]*va[1]**2 + cL[2]*va[2]**2) == 0
+
+
 def test_rotor_drag_power_nonpositive_symbolic():
     vi = sp.Matrix(sp.symbols("vi_1 vi_2 vi_3", real=True))
     W, kd, kz = sp.symbols("W k_d k_z", nonnegative=True)

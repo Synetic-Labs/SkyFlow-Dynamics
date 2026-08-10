@@ -59,7 +59,8 @@ class Params:
     cq0/cq1/cq2: per-rotor drag-torque magnitude polynomial  Q_i = cq0 + cq1·Ω + cq2·Ω²
     (N·m; cq2 ≡ k_m) · tau_m: motor time constant (s) · ka1,ka2,kd1,kd2: asymmetric motor
     coefficients (1/s, 1/(rad)) · I_rot: rotor spin-axis inertia (kg·m²) ·
-    c_D: parasitic drag diagonal (c_Dx, c_Dy, c_Dz) (N/(m/s)²) · k_d/k_z: rotor in-plane/axial
+    c_D: parasitic drag diagonal (c_Dx, c_Dy, c_Dz) (N/(m/s)²) · c_L: lumped linear body-frame
+    drag diagonal (N/(m/s), Faessler rotor-drag form) · k_d/k_z: rotor in-plane/axial
     drag (N/(m/s) per rad/s) · k_flap: blade-flapping moment coefficient (N·m/(m/s) per rad/s) ·
     k_h: translational-lift coefficient (N/(m/s)²) · k_angle/k_hor: thrust vs angle-of-attack /
     advance-ratio slopes (1/rad) · k_v2: vertical airspeed² thrust loss (N/(m/s)²) ·
@@ -87,6 +88,7 @@ class Params:
     kd2: sp.Symbol
     I_rot: sp.Symbol
     c_D: sp.Matrix
+    c_L: sp.Matrix
     k_d: sp.Symbol
     k_z: sp.Symbol
     k_flap: sp.Symbol
@@ -112,7 +114,7 @@ class Params:
             *self.cq0, *self.cq1, *self.cq2,
             self.tau_m, self.ka1, self.ka2, self.kd1, self.kd2,
             self.I_rot,
-            *self.c_D,
+            *self.c_D, *self.c_L,
             self.k_d, self.k_z, self.k_flap, self.k_h,
             self.k_angle, self.k_hor, self.k_v2, self.r_prop,
         )
@@ -151,6 +153,7 @@ def param_symbols(n: int = 4) -> Params:
         kd1=sp.Symbol("kd1", real=True), kd2=sp.Symbol("kd2", real=True),
         I_rot=sp.Symbol("I_rot", nonnegative=True),
         c_D=sp.Matrix(sp.symbols("c_Dx c_Dy c_Dz", nonnegative=True)),
+        c_L=sp.Matrix(sp.symbols("c_Lx c_Ly c_Lz", nonnegative=True)),
         k_d=sp.Symbol("k_d", nonnegative=True),
         k_z=sp.Symbol("k_z", nonnegative=True),
         k_flap=sp.Symbol("k_flap", real=True),

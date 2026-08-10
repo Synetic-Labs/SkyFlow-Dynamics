@@ -60,6 +60,7 @@ def spec_params(m: Multirotor, aero: bool) -> dict:
         "I_rot": float(m.rotor_inertia),
         "c_D": [float(m.c_Dx) if on else 0.0, float(m.c_Dy) if on else 0.0,
                 float(m.c_Dz) if on else 0.0],
+        "c_L": [0.0, 0.0, 0.0],  # RotorPy has no lumped linear drag term
         "k_d": float(m.k_d) if on else 0.0,
         "k_z": float(m.k_z) if on else 0.0,
         "k_flap": float(m.k_flap) if on else 0.0,
