@@ -157,6 +157,78 @@ def flapping_force_kai(T_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, w: sp.Matrix,
             + s_i * rt * c_bw * w_perp + rt * c_aw * cross(EZ, w))
 
 
+def flapping_moment_body_rate(W_i: sp.Expr, w: sp.Matrix, k_flap_w: sp.Expr) -> sp.Matrix:
+    """
+    CANDIDATE — rotor damping moment in roll/pitch: the tip-path plane lags a rolling or
+    pitching body (the first-harmonic flap angles carry p_w/Ω and 16·q_w/(γΩ) terms, γ =
+    Lock number), and the resulting hub moment opposes the body rate. Minimal one-parameter
+    lumping of the JSBSim FGRotor form (NASA TP-1285 eqn 32; rate terms per Amer, NACA
+    TN-2136):
+
+        M_flap_w,i = −k_flap_w · Ω_i · Π_ẑ·ω,      Π_ẑ·ω = (ω_x, ω_y, 0)
+
+    Spin-sign-FREE, so it adds pairwise over counter-rotating rotors (a net measurable
+    damping derivative, unlike rolling_moment which cancels for balanced pairs). Kai et al.
+    2017 Eq. (7) carries the same hub moment with √T_i scaling instead of Ω_i — equivalent
+    near hover; both are dissipative on the in-plane rates: ω·M = −k·Ω·(ω_x²+ω_y²) ≤ 0.
+    Lumping boundary: the source's flap angles also carry same-order gyroscopic CROSS
+    terms (roll moment ∝ −q, pitch moment ∝ +p, relative size γ/16) — dropped here as
+    they do no work and, being spin-signed, cancel pairwise on counter-rotating quads.
+    For stiff (hingeless) quadrotor props the TP-1285 hinge-offset hub-moment constant
+    becomes an effective hub stiffness folded into k_flap_w. k_flap_w: kg·m²/rad².
+    Source: JSBSim FGRotor.cpp calc_flapping_angles/body_moments (NASA TP-1285 eqns 32, 43;
+    NACA TN-2136); Kai, Allibert, Hua, Hamel, IFAC 2017 Eq. (7).
+    """
+    w_perp = sp.Matrix([w[0], w[1], 0])
+    return -k_flap_w * W_i * w_perp
+
+
+def blade_profile_drag(C_T: sp.Expr, a: sp.Expr, sigma: sp.Expr) -> sp.Expr:
+    """
+    CANDIDATE — blade profile-drag coefficient from a simplified Bailey drag polar in the
+    MEAN BLADE INCIDENCE ᾱ = 6·C_T/(a·σ) — the mean lift coefficient 6·C_T/σ divided by
+    the lift-curve slope (constants hardcoded in JSBSim FGRotor::calc_torque):
+
+        δ = 0.009 + 0.3·(6·C_T/(a·σ))²
+
+    ⚠ Because the polar's argument is incidence, NOT lift coefficient, constants from
+    C_L-based literature polars must be rescaled by 1/a² (≈1/36) before transplanting —
+    cf. Bailey's original δ = 0.0087 − 0.0216·α + 0.400·α² (NACA Rep. 716).
+    a: blade lift-curve slope (1/rad, ≈ 5.7–6.3); σ = b·c/(πR) rotor solidity (b blades of
+    chord c). Feeds bramwell_torque.
+    Source: JSBSim FGRotor.cpp calc_torque; polar lineage per Bailey, NACA Rep. 716 (1941).
+    """
+    return 0.009 + 0.3 * (6 * C_T / (a * sigma))**2
+
+
+def bramwell_torque(T: sp.Expr, H: sp.Expr, mu: sp.Expr, lam: sp.Expr, rho: sp.Expr,
+                    blades: sp.Expr, chord: sp.Expr, R: sp.Expr, Omega: sp.Expr,
+                    delta: sp.Expr) -> sp.Expr:
+    """
+    CANDIDATE — rotor shaft (drag) torque with flight-condition dependence:
+
+        Q = ρ·b·c·δ·(ΩR)²·R²·(1 + 4.5μ²)/8 − (T·λ + H·μ)·R
+
+    Nondimensional flight state (from spec.inflow): edgewise advance ratio μ = ‖v_⊥‖/(ΩR);
+    inflow ratio λ = −(v_climb + v_i)/(ΩR) with v_climb the axial airspeed along the thrust
+    axis (positive climbing) and v_i ≥ 0 the induced velocity — λ < 0 in hover, so
+    −T·λ·R = T·(v_climb+v_i)/Ω is exactly the momentum-theory induced + climb power over Ω.
+    H: rotor in-plane drag force resolved along −v̂_⊥ (positive opposing edgewise motion,
+    the H-force/a_dw of the source). First term: blade profile torque growing with edgewise
+    speed as (1+4.5μ²). Generalizes the verified rotor_torque_polynomial, which is this
+    model's fixed-flight-condition slice in Ω. Signs follow the source's control-axes
+    bookkeeping exactly (the H-force profile power is already inside the 4.5μ² growth);
+    autorotation: Q → 0 as descent drives λ positive. Validity envelope: JSBSim clamps
+    μ ≤ 0.7 before evaluating these closed forms — do the same (fast multirotors with low
+    tip speed can exceed it).
+    Source: JSBSim FGRotor.cpp calc_torque (simplified SH79 eqn 36); Bramwell, Helicopter
+    Dynamics 2nd ed., eqns 3.43–3.44.
+    """
+    profile = rho * blades * chord * delta * (Omega * R)**2 * R**2 \
+        * (1 + sp.Rational(9, 2) * mu**2) / 8
+    return profile - (T * lam + H * mu) * R
+
+
 def parasitic_drag(v_a: sp.Matrix, c_D: sp.Matrix) -> sp.Matrix:
     """
     Quadratic frame drag at the CoM (N):

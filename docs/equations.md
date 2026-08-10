@@ -305,6 +305,33 @@ Kai Eq. (10) flapping force incl. spin-signed lateral and body-rate damping term
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** The published basis for the lumped linear drag; adds rotor-plane damping (B·ω) absent from the verified tier.
 
+### `flapping_moment_body_rate` — *candidate*
+
+Rotor roll/pitch damping moment −k_flap_w·Ω·Π_ẑ·ω (tip-path plane lags body rate).
+
+- **Defined in:** `spec.rotor_aero.flapping_moment_body_rate`
+- **Sources:** Shaughnessy, Deaux, Yenni — Development and Validation of a Piloted Simulation of a Helicopter and External Sling Load, NASA TP-1285, 1979 (JSBSim FGRotor's model basis); body-rate flap terms per Amer, NACA TN-2136, 1950; JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028; Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** Spin-sign-free: adds (not cancels) pairwise — a net damping derivative. Kai Eq. (7) carries the same hub moment with √T scaling; JSBSim derives it from flap angles + hinge-offset hub moments.
+
+### `bramwell_rotor_torque` — *candidate*
+
+Q = ρbcδ(ΩR)²R²(1+4.5μ²)/8 − (Tλ+Hμ)R: profile + induced/climb torque vs flight state.
+
+- **Defined in:** `spec.rotor_aero.bramwell_torque, spec.rotor_aero.blade_profile_drag`
+- **Sources:** Bramwell — Helicopter Dynamics, 2nd ed., eqns 3.43-3.44 (rotor torque decomposition: profile + induced/climb components); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** The flight-condition dependence (yaw authority and power rise with μ, fall in descent) that the verified torque polynomial — its fixed-condition slice — lacks. Needs λ, μ: adopt together with dynamic_inflow_lag.
+
+### `ground_effect_talbot_inflow` — *candidate*
+
+IGE inflow factor v_i ← (1 − load·e^{−k_ge(h+h₀)})·v_i, exponential in height.
+
+- **Defined in:** `spec.ground_effect.talbot_inflow_factor`
+- **Sources:** Talbot & Corliss — A Mathematical Force and Moment Model of a UH-1H Helicopter for Flight Dynamics Simulations, NASA TM-73,254, 1977 (eqn 10a ground-effect inflow factor); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** Acts on induced velocity (composes with dynamic_inflow_lag); the thrust-ratio family (cheeseman_bennett, sanchez_cuevas, pybullet) acts on T directly — use one route, never both.
+
 
 ## Frame aerodynamics
 
@@ -480,6 +507,9 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **faessler2018**: Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, IEEE RA-L 2018
 - **jsbsim**: JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028 — <https://github.com/JSBSim-Team/jsbsim>
 - **mccormick**: McCormick — Aerodynamics, Aeronautics, and Flight Mechanics, 1st ed. (momentum-theory induced velocity, Eq. 6.15)
+- **sh79**: Shaughnessy, Deaux, Yenni — Development and Validation of a Piloted Simulation of a Helicopter and External Sling Load, NASA TP-1285, 1979 (JSBSim FGRotor's model basis); body-rate flap terms per Amer, NACA TN-2136, 1950
+- **bramwell**: Bramwell — Helicopter Dynamics, 2nd ed., eqns 3.43-3.44 (rotor torque decomposition: profile + induced/climb components)
+- **talbot1977**: Talbot & Corliss — A Mathematical Force and Moment Model of a UH-1H Helicopter for Flight Dynamics Simulations, NASA TM-73,254, 1977 (eqn 10a ground-effect inflow factor)
 - **sanchez2017**: Sanchez-Cuevas, Heredia, Ollero — Characterization of the Aerodynamic Ground Effect and Its Influence in Multirotor Control, Int. J. Aerospace Eng. 2017, doi 10.1155/2017/1823056
 - **cheeseman1955**: Cheeseman & Bennett — The Effect of the Ground on a Helicopter Rotor in Forward Flight, ARC R&M 3021, 1955
 - **pybullet_drones**: utiasDSL/gym-pybullet-drones BaseAviary (_groundEffect, _downwash) + cf2x.urdf identified constants — <https://github.com/utiasDSL/gym-pybullet-drones>

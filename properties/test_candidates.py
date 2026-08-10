@@ -60,6 +60,18 @@ def test_pybullet_downwash_shape():
     assert abs(fn(1.0, 0.5)) < abs(f0)
 
 
+def test_talbot_inflow_factor_limits():
+    h, kge, hs = sp.symbols("h k_ge h_s", positive=True)
+    f = ground_effect.talbot_inflow_factor(h, kge, hs, 1)
+    assert sp.limit(f, h, sp.oo) == 1                          # OGE recovery
+    # Monotone rising toward 1 with height (inflow recovers as ground recedes).
+    assert sp.simplify(sp.diff(f, h) - kge * sp.exp(-kge * (h + hs))) == 0
+    # load = 0 is the forward-flight kill-switch: exactly OGE.
+    assert sp.simplify(ground_effect.talbot_inflow_factor(h, kge, hs, 0) - 1) == 0
+    # Near the ground the inflow is REDUCED (f < 1) — that's the thrust-gain mechanism.
+    assert 0 < float(f.subs({h: 1e-12, kge: 0.2, hs: 0.3})) < 1
+
+
 def test_jain_wake_thrust_scaling_and_decay():
     T, rho, A, L, z0 = sp.symbols("T rho A L z0", positive=True)
     r_ = sp.Symbol("r", nonnegative=True)
@@ -155,6 +167,56 @@ def test_flapping_force_pairwise_cancellation():
     expected = sp.simplify(2 * (-sp.sqrt(T) * cav * sp.Matrix([vi_[0], vi_[1], 0])
                                 + sp.sqrt(T) * caw * (EZ.cross(w))))
     assert sp.simplify(total - expected) == sp.zeros(3, 1)
+
+
+def test_flapping_moment_body_rate_is_dissipative():
+    W = sp.Symbol("W", positive=True)
+    k = sp.Symbol("k_fw", positive=True)
+    w = sp.Matrix(sp.symbols("w1 w2 w3", real=True))
+    M = rotor_aero.flapping_moment_body_rate(W, w, k)
+    assert M[2] == 0                                           # roll/pitch damping only
+    # ω·M = −k·Ω·(ω_x² + ω_y²) ≤ 0: strictly dissipative on the in-plane rates.
+    power = sp.expand((w.T * M)[0, 0])
+    assert sp.simplify(power + k * W * (w[0]**2 + w[1]**2)) == 0
+    # Spin-sign-free: a counter-rotating pair at equal speed DOUBLES the moment (contrast
+    # rolling_moment, which cancels pairwise).
+    assert sp.simplify(2 * M - (M + rotor_aero.flapping_moment_body_rate(W, w, k))) \
+        == sp.zeros(3, 1)
+
+
+def test_bramwell_torque_energy_identities():
+    T, H, rho_, bl, ch, R_, Om, delta = sp.symbols(
+        "T H rho b_l c_h R_r Omega delta", positive=True)
+    vi3, vc = sp.symbols("v_i3 v_c", positive=True)
+    P_profile_over_Om = rho_ * bl * ch * delta * (Om * R_)**2 * R_**2 / 8
+    # Hover (μ = 0, λ = −v_i/ΩR): Q·Ω = P_profile + T·v_i — momentum-theory induced power.
+    lam_h = -vi3 / (Om * R_)
+    Q_h = rotor_aero.bramwell_torque(T, H, 0, lam_h, rho_, bl, ch, R_, Om, delta)
+    assert sp.simplify(Q_h * Om - (P_profile_over_Om * Om + T * vi3)) == 0
+    # Climb by v_c adds exactly the climb power T·v_c.
+    lam_c = -(vc + vi3) / (Om * R_)
+    Q_c = rotor_aero.bramwell_torque(T, H, 0, lam_c, rho_, bl, ch, R_, Om, delta)
+    assert sp.simplify((Q_c - Q_h) * Om - T * vc) == 0
+    # Forward flight grows the profile term as (1 + 4.5μ²); H = 0 isolates it.
+    mu_ = sp.Rational(3, 10)
+    Q_mu = rotor_aero.bramwell_torque(T, 0, mu_, lam_h, rho_, bl, ch, R_, Om, delta)
+    Q_0 = rotor_aero.bramwell_torque(T, 0, 0, lam_h, rho_, bl, ch, R_, Om, delta)
+    assert sp.simplify((Q_mu - Q_0) - P_profile_over_Om * sp.Rational(9, 2) * mu_**2) == 0
+    # Autorotation: descent drives λ positive and the torque through zero.
+    lam_auto = P_profile_over_Om / (T * R_)
+    assert sp.simplify(rotor_aero.bramwell_torque(
+        T, 0, 0, lam_auto, rho_, bl, ch, R_, Om, delta)) == 0
+
+
+def test_blade_profile_drag_polar():
+    a, sig = sp.symbols("a sigma", positive=True)
+    CT = sp.Symbol("C_T", positive=True)
+    d0 = rotor_aero.blade_profile_drag(0, a, sig)
+    assert abs(float(d0) - 0.009) < 1e-15                      # bare profile drag
+    # Quadratic growth in blade loading: the increment scales 4× when C_T doubles.
+    inc1 = rotor_aero.blade_profile_drag(CT, a, sig) - d0
+    inc2 = rotor_aero.blade_profile_drag(2 * CT, a, sig) - d0
+    assert sp.simplify(inc2 - 4 * inc1) == 0
 
 
 # ---------------- motor / battery electrical ----------------

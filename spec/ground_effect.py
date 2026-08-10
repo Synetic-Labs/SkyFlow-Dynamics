@@ -6,7 +6,8 @@ runnable reference by golden vectors (the reference implementations we golden ag
 neither effect). Promotion path: freeze vectors from gym-pybullet-drones or bench data.
 
 All heights z are the rotor-plane height above ground along the ground normal (m); R is the
-rotor radius (m). Ratios are multiplicative on thrust at fixed rotor speed/power.
+rotor radius (m). Ratios are multiplicative on thrust at fixed rotor speed/power — except
+talbot_inflow_factor, which scales the induced VELOCITY (use one route, never both).
 """
 
 import sympy as sp
@@ -55,6 +56,34 @@ def sanchez_cuevas(z: sp.Expr, R: sp.Expr, d: sp.Expr, b: sp.Expr, K_b: sp.Expr)
                 - R**2 * z / (d**2 + 4 * z**2)**sp.Rational(3, 2)
                 - (R**2 / 2) * z / (2 * d**2 + 4 * z**2)**sp.Rational(3, 2)
                 - 2 * R**2 * K_b * z / (b**2 + 4 * z**2)**sp.Rational(3, 2))
+
+
+def talbot_inflow_factor(h: sp.Expr, k_ge: sp.Expr, h_shift: sp.Expr,
+                         load: sp.Expr) -> sp.Expr:
+    """
+    In-ground-effect INFLOW reduction, exponential in height (JSBSim FGRotor form):
+
+        f_GE = 1 − load · exp(−k_ge·(h + h_shift)),      applied as  v_i ← f_GE · v_i
+
+    Unlike the thrust-ratio models above, this scales the induced velocity: reduced inflow
+    raises the effective blade incidence, so thrust at fixed Ω rises — the more physical
+    route. Apply f_GE ONCE to the quasi-steady inflow (the ν_eq equilibrium of
+    spec.inflow.dynamic_inflow_lag, or the output v_i). ⚠ Do NOT copy JSBSim's variant,
+    which multiplies the persistent inflow STATE every step — compounding through the lag
+    filter, that is timestep-dependent with fixed point ν* = f·ν_eq·(1−e)/(1−f·e),
+    e = e^(−dt/τ), far below f·ν_eq for small dt. load is a rotor-loading × runtime scale
+    (JSBSim: RPM/NominalRPM — a startup guard that can exceed 1, with the f_GE clamp doing
+    the real bounding — times a property used as a forward-flight kill-switch); take
+    load ∈ [0, 1] here, load = 0 giving f_GE = 1 (OGE). k_ge ≈ 0.13–0.33 1/m (source docs:
+    0.04–0.1 1/ft, small rotors at the high end; effect vanishes ~2–3 rotor diameters up);
+    h_shift ≈ hub height above the ground contact point. Implementation lessons that
+    transfer: clamp f_GE to [0.5, 1] and low-pass h so terrain steps don't produce force
+    discontinuities (JSBSim's comment says 1 Hz, but Filter(1.0, dt) places the pole at
+    1 rad/s ≈ 0.16 Hz — match the behavior, not the comment).
+    Source: JSBSim FGRotor.cpp CalcRotorState (master @ 9a0b028, lines 639–646); the
+    inflow-scaling idea credited there to Talbot & Corliss, NASA TM-73,254 (1977), eqn 10a.
+    """
+    return 1 - load * sp.exp(-k_ge * (h + h_shift))
 
 
 def pybullet_ground_effect(T_i: sp.Expr, z_i: sp.Expr, R: sp.Expr, G: sp.Expr) -> sp.Expr:
