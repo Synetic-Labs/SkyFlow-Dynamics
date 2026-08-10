@@ -19,12 +19,15 @@ expressions, and every backend runs the same golden + property suite.
 
 ## Repository layout
 
-| Directory | Contents |
+| Path | Contents |
 |---|---|
-| `spec/` | The SymPy source of truth: one module per physics domain, plus the term registry with tier/status/citations. |
-| `properties/` | pytest suite of physics invariants (accuracy). |
-| `golden/` | Frozen reference vectors + the generator scripts that produced them (authenticity). |
-| `docs/` | Human-readable rendering (LaTeX/Markdown) generated from the spec. |
+| `spec/` | The SymPy source of truth: one module per physics domain, plus `registry.py` — every term with tier, provenance, and tests. |
+| `properties/` | pytest suite of physics invariants (accuracy): symbolic proofs, conservation, symmetry, dimensional scaling, Jacobian-vs-FD, and the golden authenticity tests. |
+| `golden/vectors/` | Frozen reference vectors from **three independent provenances**: RotorPy `research-additions` (full model, 12 files), Crazyflow's actual running code, SkyDreamer's actual running code — each with commit/sha provenance. |
+| `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
+| `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
+| `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
+| `INTAKE.md` | The protocol for evaluating a new paper/repo against the registry. |
 | `backends/` | *(later)* generated adapters: `jax.py` first. |
 | `harness/` | *(later, TBD)* the discrete/stateful simulation layer (command delay lines, ZOH control rates, disturbance resampling, RNG) — deliberately **not** part of the math spec. |
 
@@ -60,6 +63,22 @@ Every term in `spec/registry.py` carries a tier:
 ```bash
 uv sync
 uv run pytest
+```
+
+## Regenerating golden vectors
+
+Each generator pins its source (commit hash / file sha256 recorded in the JSON provenance):
+
+```bash
+# RotorPy (run from the rotorpy checkout, uses its venv):
+cd ../rotorpy && uv run --extra all python \
+    ../SkyFlow-Dynamics/golden/generate/gen_rotorpy.py --out ../SkyFlow-Dynamics/golden/vectors
+
+# Crazyflow (bare-package shim over the local fork):
+uv run --with scipy --with array-api-compat python golden/generate/gen_crazyflow.py --out golden/vectors
+
+# SkyDreamer (execs their literal dynamics source, njit stubbed):
+uv run python golden/generate/gen_skydreamer.py --out golden/vectors
 ```
 
 ## Adding new physics
