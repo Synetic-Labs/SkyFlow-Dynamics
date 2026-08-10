@@ -36,16 +36,24 @@ def norm_squared(q: sp.Matrix) -> sp.Expr:
 
 def rotation_matrix(q: sp.Matrix) -> sp.Matrix:
     """
-    Body→world rotation matrix R(q) for a UNIT quaternion:  r_W = R(q)·r_B.
+    Body→world rotation matrix R(q):  r_W = R(q)·r_B, in the scale-invariant homogeneous form
 
-        R = (q_w² − q_v·q_v)·I + 2·q_v q_vᵀ + 2·q_w·hat(q_v),   q_v = (q_x, q_y, q_z).
+        R = [ (q_w² − q_v·q_v)·I + 2·q_v q_vᵀ + 2·q_w·hat(q_v) ] / ‖q‖²,  q_v = (q_x, q_y, q_z).
+
+    On the unit manifold this is the textbook unit-quaternion matrix. The ‖q‖² division makes
+    R exact for any q ≠ 0 (R(λq) = R(q)) — deliberately: fixed-step integrators evaluate the
+    dynamics at stage states whose quaternion has drifted off unit norm, and reference
+    implementations (scipy Rotation, and most libraries) normalize there. Without the division
+    the spec's RK4 step disagrees with the references at O(‖q‖²−1) — found by the rk4-step
+    golden vectors.
     """
     w, x, y, z = q
+    n = w**2 + x**2 + y**2 + z**2
     return sp.Matrix([
-        [1 - 2*(y**2 + z**2), 2*(x*y - w*z),       2*(x*z + w*y)],
-        [2*(x*y + w*z),       1 - 2*(x**2 + z**2), 2*(y*z - w*x)],
-        [2*(x*z - w*y),       2*(y*z + w*x),       1 - 2*(x**2 + y**2)],
-    ])
+        [w**2 + x**2 - y**2 - z**2, 2*(x*y - w*z),             2*(x*z + w*y)],
+        [2*(x*y + w*z),             w**2 - x**2 + y**2 - z**2, 2*(y*z - w*x)],
+        [2*(x*z - w*y),             2*(y*z + w*x),             w**2 - x**2 - y**2 + z**2],
+    ]) / n
 
 
 def rotate(q: sp.Matrix, r: sp.Matrix) -> sp.Matrix:
