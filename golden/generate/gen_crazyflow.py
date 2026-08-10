@@ -15,10 +15,11 @@ Conversions to SkyFlow canonical form:
   is M_x = L·Σ mix_x,i·T_i, M_y = L·Σ mix_y,i·T_i ⇒ r_i = (−L·mix_y,i, +L·mix_x,i, 0) ·
   spin = −mix_z (mix_z is the yaw-TORQUE sign) · drag_matrix = −diag(c_L) (lumped linear drag).
 
+Gyroscopic term: INCLUDED (prop_inertia from params.toml). Crazyflow's original gyro had the
+roll-row sign flipped (finding F-3); fixed upstream by learnsyslab/crazyflow PR #86 (merged
+2026-07-13) — generate only from a checkout at/after that merge.
+
 Deliberately excluded:
-  prop_inertia forced to 0 — the fork's gyroscopic term (commit 73c96a6) builds h from mix_z
-  (the torque sign) instead of the physical spin −mix_z, negating both roll/pitch components
-  relative to −ω×h; disputed math stays out of the truth set (see REFERENCES.md).
   quat_dot — their Ξ(ω) construction is scalar-first but applied to xyzw storage; their own
   docstring forbids integrating it, so it is vestigial. Compared blocks: xdot, vdot, wdot, Wdot.
 """
@@ -116,7 +117,7 @@ def main():
         "tau_m": 1.0 / coef[0],  # unused (motor_model=asymmetric)
         "ka1": coef[0], "ka2": coef[1] / RPM2RAD,
         "kd1": coef[2], "kd2": coef[3] / RPM2RAD,
-        "I_rot": 0.0,
+        "I_rot": cfp["prop_inertia"],
         "c_D": [0.0, 0.0, 0.0],
         "c_L": (-np.diag(drag)).tolist(),
         "k_d": 0.0, "k_z": 0.0, "k_flap": 0.0, "k_h": 0.0,
@@ -137,7 +138,8 @@ def main():
 
         pos_dot, _quat_dot, vel_dot, ang_dot, rotor_dot = cf_dynamics(
             pos, q, vel, ang, cmd_rpm, rotor_vel=rotor_rpm,
-            mass=mass, L=L, prop_inertia=0.0, gravity_vec=np.array([0.0, 0.0, -9.81]),
+            mass=mass, L=L, prop_inertia=cfp["prop_inertia"],
+            gravity_vec=np.array([0.0, 0.0, -9.81]),
             J=J, J_inv=np.linalg.inv(J), rpm2thrust=rpm2thrust, rpm2torque=rpm2torque,
             mixing_matrix=mix, drag_matrix=drag, rotor_dyn_coef=coef)
 
@@ -165,10 +167,10 @@ def main():
                       "actual running code via bare-package shim",
             "source_commit": commit,
             "date": datetime.date.today().isoformat(),
-            "notes": "prop_inertia forced to 0 (fork's gyro term disputed, both components "
-                     "negated vs -omega x h with spin = -mix_z; see REFERENCES.md); quat_dot "
-                     "excluded (scalar-first Xi applied to xyzw storage, unused by their "
-                     "integrator). RPM->rad/s and polynomial conversions applied.",
+            "notes": "prop_inertia ACTIVE: gyro term correct at/after learnsyslab/crazyflow "
+                     "PR #86 (merged 2026-07-13; F-3 roll-row sign fix). quat_dot excluded "
+                     "(scalar-first Xi applied to xyzw storage, unused by their integrator). "
+                     "RPM->rad/s and polynomial conversions applied.",
         },
         "params": spec_params, "cases": cases,
     }

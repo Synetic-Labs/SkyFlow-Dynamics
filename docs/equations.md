@@ -174,7 +174,7 @@ Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ.
 - **Parameters:** `I_rot`, `spin`
 - **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions; Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
 - **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
-- **Notes:** Signs re-derived from τ = −d/dt(h); Crazyflow's gyro-x sign is flipped (finding F-3, confirmed against their running code — our sign wins).
+- **Notes:** Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped (finding F-3, confirmed against their running code); fixed upstream by learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden vectors now cross-validate this term.
 
 ### `rotor_drag_hforce` — **verified**
 

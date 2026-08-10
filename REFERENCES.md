@@ -648,12 +648,17 @@ Standard atmospheric turbulence for a small-multirotor simulator is fully specif
 - **RotorPy (spencerfolk/rotorpy, branch research-additions)** — the primary verified
   reference; all verified-tier terms golden-tested against its NumPy dynamics. Its IMU
   frame defects (F-1/F-2) were found and fixed there; the corrected equations are the spec.
-- **Crazyflow (Synetic-Labs fork)** — golden source for polynomial curves, asymmetric motor,
-  mixing-matrix moments, lumped linear drag. ⚠ Its gyroscopic term is disputed: the original
-  had the x-component sign flipped (finding F-3, confirmed against running code); the fork's
-  fix (commit 73c96a6) flipped the pitch term instead, leaving BOTH components negated
-  relative to −ω×h with the physical spin s = −mix_z. Also its `ang_vel2quat_dot` applies a
-  scalar-first Ξ(ω) to xyzw-stored quaternions (vestigial — their integrator uses ang_vel).
+- **Crazyflow (learnsyslab/crazyflow; Synetic-Labs fork)** — golden source for polynomial
+  curves, asymmetric motor, mixing-matrix moments, lumped linear drag, AND the gyroscopic
+  term. History of finding F-3: the original code had the gyro roll-row sign flipped
+  (confirmed against running code); **fixed upstream by PR learnsyslab/crazyflow#86 (Zaffer,
+  merged 2026-07-13)** with the correct `(+q·S, −p·S, ·)` form. An earlier revision of that
+  PR (briefly present on a fork branch as commit 73c96a6) flipped the pitch row instead —
+  superseded before merge; the fork was synced to upstream 0.3.0 and pushed on 2026-08-10.
+  Golden vectors include prop_inertia and must be generated from a checkout at/after the
+  PR #86 merge. Remaining observation: `ang_vel2quat_dot` applies a scalar-first Ξ(ω) to
+  xyzw-stored quaternions (vestigial — their integrator uses ang_vel; docstring forbids
+  integrating quat_dot).
 - **SkyDreamer (arXiv:2510.14783)** — golden source for the AoA/advance-ratio thrust model
   and linear rotor drag. Coefficients are mass-/inertia-normalized (finding F-4); moments are
   per-rotor identified k_p/k_q/k_r (not structural); quadratic drag is per-axis |v_k|·v_k.
