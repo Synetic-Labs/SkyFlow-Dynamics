@@ -18,14 +18,17 @@ def hover_induced_velocity(T: sp.Expr, rho: sp.Expr, A: sp.Expr) -> sp.Expr:
 
 def induced_velocity_axial(V_a: sp.Expr, T: sp.Expr, rho: sp.Expr, A: sp.Expr) -> sp.Expr:
     """
-    Exact induced velocity for axial flow through the disk — the closed-form root of
-    T = 2ρA(V_a + v_i)v_i, written sign-safe for opposing V_a and T:
+    Induced velocity for axial flow through the disk (JSBSim's sign-safe form):
 
         S = V_a·|V_a| + 2T/(ρA)
         v_i = ½(−V_a + √S)   if S > 0,   else   ½(−V_a − √(−S))
 
-    V_a: axial airspeed into the disk (m/s), v_i positive downstream. Smooth except at S = 0
-    (use a smooth-min patch in differentiable backends).
+    V_a: axial airspeed into the disk (m/s), v_i positive downstream. ⚠ This is the EXACT
+    root of the momentum equation T = 2ρA(V_a + v_i)v_i only for V_a ≥ 0 (climb/inflow);
+    for V_a < 0 the V_a·|V_a| term makes it a sign-symmetric continuation that deviates from
+    the momentum equation by O((V_a/v_h)²) — acceptable in slow descent, where momentum
+    theory itself is failing anyway (VRS band). Smooth except at S = 0 (use a smooth-min
+    patch in differentiable backends).
     Source: McCormick, "Aerodynamics, Aeronautics, and Flight Mechanics", Eq. 6.15, as
     implemented in JSBSim FGPropeller.cpp:251–261.
     """

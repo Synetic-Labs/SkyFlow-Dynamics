@@ -19,7 +19,12 @@ Scope (structural, documented):
 Conversions (finding F-4): SkyDreamer emits mass-normalized accelerations — spec coefficients
 are ct2 = m·k_w, k_d = m·k_x, k_v2 = m·k_v2 for an arbitrary mass. Rotor states are normalized
 w_n ∈ [−1,1] over [0, 3000] rad/s: Ω = (w_n+1)/2·3000, Ω̇ = ẇ_n·1500. Their quaternion is
-already scalar-first wxyz. Zero action → commanded speed = throttle_curve(0) = w_min.
+already scalar-first wxyz. Zero action a = 0 maps to throttle U = (a+1)/2 = 0.5, so the
+commanded speed is throttle_curve(0.5) ≈ 2030.8 rad/s (a = −1 would give w_min).
+
+Provenance: the local file's compute_dynamics_jit block was diff-verified identical (modulo a
+shortened docstring) to The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py — the released
+reference implementation, which declares ENU explicitly.
 """
 
 import argparse
@@ -126,7 +131,8 @@ def main():
         "provenance": {
             "generator": "golden/generate/gen_skydreamer.py",
             "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit — literal source "
-                      "exec'd with njit stubbed",
+                      "exec'd with njit stubbed; dynamics block diff-verified identical to "
+                      "The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py (ENU)",
             "source_file": str(path),
             "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "date": datetime.date.today().isoformat(),

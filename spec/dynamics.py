@@ -1,5 +1,5 @@
 """
-The canonical continuous-time model:  ṡ = f(s, u, w).
+The canonical continuous-time model:  ṡ = f(s, u, θ)   (state, inputs, parameters).
 
 Assembles motor dynamics, the body wrench, and the rigid-body equations into the full state
 derivative. This single symbolic function is what golden vectors pin down and what backends

@@ -14,8 +14,8 @@ number/section, or repo file path + line numbers at a specific commit.
 
 For each model, search `spec/registry.py` for an existing term. A model is *covered* only if
 the math is equivalent **after conversion to canonical conventions** — verify, don't
-pattern-match on names. Known traps (each burned us once; see the finding IDs in
-`golden/README.md`):
+pattern-match on names. Known traps (each burned us once; the F-* finding IDs are documented
+in [REFERENCES.md](REFERENCES.md), "Prior evaluations"):
 
 - [ ] **Units**: RPM vs rad/s (Crazyflow polynomials are in RPM — coefficients scale by
       `60/2π` per power of Ω); degrees vs rad.

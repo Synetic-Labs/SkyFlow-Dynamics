@@ -74,8 +74,10 @@ def test_rk4_matches_exact_exp_to_fourth_order():
 
 
 def test_asymmetric_crazyflow_values():
-    # cf21B_500 identified set (converted from RPM): spin-up strictly faster than spin-down
-    # for the same |Δ|, at hover-scale speeds.
+    # cf21B_500 identified set, expressed in rad/s units (ka1/kd1 carry over from the RPM
+    # identification unchanged; ka2/kd2 were converted by 60/2π — one factor per Ω-power
+    # minus one, since Ω̇ rescales too): spin-up strictly faster than spin-down for the same
+    # |Δ| at hover-scale speeds.
     W = sp.Matrix([sp.Symbol("W")])
     Wc = sp.Matrix([sp.Symbol("Wc")])
     ka1, ka2, kd1, kd2 = 13.996, 0.00011093, 5.9332, 0.00031951

@@ -1,8 +1,12 @@
 """
 Total body wrench assembly: forces and moments in the body frame.
 
-    F_B = Σᵢ (T_i·ê_i + H_i)  +  D_parasitic + D_climb
+    F_B = Σᵢ (T_i·ê_i + H_i)  +  D_parasitic + D_linear + D_climb
     M_B = Σᵢ r_i × (T_i·ê_i + H_i)  +  Σᵢ (−s_i)·Q_i·ê_i  +  Σᵢ M_flap,i  +  M_rotor-inertia
+
+with D_linear = −diag(c_L)·v_a the lumped (Faessler-form) linear drag. ⚠ c_L and the
+per-rotor H-force coefficients {k_d, k_z} lump the same physics — identify a vehicle against
+ONE of the two, never both (no structural guard exists; c_L defaults to zero).
 
 with T_i the (aero-corrected) thrust magnitude along the per-rotor unit axis ê_i (default ẑ),
 H_i the rotor-drag force, Q_i the drag-torque magnitude, and s_i the physical spin sign — the
@@ -56,8 +60,11 @@ def rotor_inertia_moment(w: sp.Matrix, W: sp.Matrix, W_dot: sp.Matrix, p) -> sp.
 
     Both vanish for balanced counter-rotating rotors at constant speed. The x and y components
     of M_gyro must carry opposite signs (−ω×h = (−h_z·ω_y, +h_z·ω_x, 0)) — a known failure mode
-    in reference sims (Crazyflow's gyro-x sign is flipped; finding F-3, confirmed against their
-    running code). Derivation: τ_body = −d/dt(h)|inertial = −ḣ_body − ω × h.
+    in reference sims (Crazyflow's gyro roll-row sign was flipped; finding F-3, fixed upstream
+    by their PR #86). Derivation: τ_body = −d/dt(h)|inertial = −ḣ_body − ω × h.
+    ⚠ Assumes every rotor spins about ẑ_B: unlike the thrust/yaw terms, this term does NOT
+    follow a tilted per-rotor axis ê_i (matching the verified references, which share the
+    restriction). For ê_i ≠ ẑ with I_rot ≠ 0 the momentum would be h = I_rot·Σ s_i·Ω_i·ê_i.
     """
     h = p.I_rot * sum(p.spin[i] * W[i] for i in range(p.n)) * EZ
     reaction = -p.I_rot * sum(p.spin[i] * W_dot[i] for i in range(p.n)) * EZ

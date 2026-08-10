@@ -10,8 +10,15 @@ in the surrogate-gradient scheme (see below).
 Discrete step (the form used for backprop-through-time):
     x⁺ = x + dt·v
     v⁺ = v + dt·( g_W + R(q)·(0, 0, c) )
-    q⁺ = q ⊗ exp(dt·ω_cmd)          (quaternion exponential of the commanded rotation)
+    q⁺ = q ⊗ Exp(dt·ω_cmd)          Exp = rotation-vector → unit-quaternion map,
+                                     Exp(φ) = (cos(θ/2), sin(θ/2)·φ/θ) — the HALF-angle form
+                                     (quaternion.from_rotation_vector), not the literal
+                                     quaternion exponential of (0, φ), which would double the
+                                     rotation angle.
     ω⁺ = ω_cmd
+
+⚠ Backend guard: Exp has a removable 0/0 at ω_cmd = 0 (hover!) — generated code must use the
+Taylor form near zero (see quaternion.from_rotation_vector).
 
 Surrogate gradient (straight-through estimator, framework-agnostic):
     y_out = y_simplified + stop_gradient( y_full − y_simplified )

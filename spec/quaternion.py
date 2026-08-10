@@ -57,8 +57,14 @@ def rotation_matrix(q: sp.Matrix) -> sp.Matrix:
 
 
 def rotate(q: sp.Matrix, r: sp.Matrix) -> sp.Matrix:
-    """Rotate a 3-vector by the quaternion sandwich: vector part of q ⊗ (0, r) ⊗ q*."""
-    return product(product(q, sp.Matrix([0, r[0], r[1], r[2]])), conjugate(q))[1:4, 0]
+    """
+    Rotate a 3-vector: vector part of q ⊗ (0, r) ⊗ q*, divided by ‖q‖².
+    The raw sandwich scales by ‖q‖² for non-unit q; the division makes rotate(q, r) equal
+    rotation_matrix(q)·r for ALL q ≠ 0, consistent with rotation_matrix's deliberate
+    scale-invariance (off-manifold RK stage states — see rotation_matrix's docstring).
+    """
+    sandwich = product(product(q, sp.Matrix([0, r[0], r[1], r[2]])), conjugate(q))[1:4, 0]
+    return sandwich / norm_squared(q)
 
 
 def kinematics(q: sp.Matrix, omega_body: sp.Matrix) -> sp.Matrix:
@@ -70,8 +76,11 @@ def from_rotation_vector(phi: sp.Matrix) -> sp.Matrix:
     """
     Exponential map: rotation vector φ (rad, axis·angle) → unit quaternion
         q = (cos(θ/2), sin(θ/2)·φ/θ),  θ = ‖φ‖.
-    Written with sinc-style structure so the θ→0 limit is (1, φ/2) — but note the symbolic
-    expression contains θ in denominators; evaluate the series form for tiny θ numerically.
+    ⚠ The singularity at θ = 0 is removable (the limit is (1, φ/2)) but NOT removed here:
+    the expression literally contains θ in denominators, so naive codegen/autodiff evaluates
+    0/0 (NaN value and NaN gradients) at φ = 0 — an ordinary input (hover, zero rate
+    command; spec.simplified.step composes this at dt·ω_cmd). Backends MUST substitute the
+    Taylor form for small θ:  q ≈ (1 − θ²/8,  φ·(1/2 − θ²/48)).
     """
     theta = sp.sqrt(phi[0]**2 + phi[1]**2 + phi[2]**2)
     return sp.Matrix([

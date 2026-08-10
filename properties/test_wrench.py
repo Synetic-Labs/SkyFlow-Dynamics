@@ -102,11 +102,13 @@ def test_balanced_counter_rotation_cancels_rotor_inertia():
     np.testing.assert_allclose(M, 0, atol=1e-18)
 
 
-def test_flapping_pitch_up_in_forward_flight():
+def test_flapping_moment_sign_in_forward_flight():
+    # M = −k_flap·Ω·(v×ẑ) gives +M_y for v_x > 0 (nose-DOWN in this FLU frame; the sign of
+    # an identified k_flap is part of its identification convention — see the docstring).
     vals = params_dict(k_flap=1.5e-7, k_d=0.0, k_z=0.0)
     _, Mf = _wrench_fn(vals)
     M = np.asarray(Mf([0, 0, 0], [3.0, 0, 0], [1800.0] * 4), float).ravel()
-    assert M[1] > 0            # pitch-up
+    assert M[1] > 0            # +M_y, matching the golden-pinned reference expression
     assert abs(M[0]) < 1e-12   # no roll from pure-x airspeed
 
 

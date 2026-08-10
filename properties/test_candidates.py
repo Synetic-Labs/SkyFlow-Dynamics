@@ -153,7 +153,7 @@ def test_flapping_force_pairwise_cancellation():
     total = sp.simplify(F_ccw + F_cw)
     # Spin-signed terms gone; what remains is the unsigned drag/damping part, doubled.
     expected = sp.simplify(2 * (-sp.sqrt(T) * cav * sp.Matrix([vi_[0], vi_[1], 0])
-                                - sp.sqrt(T) * caw * (EZ.cross(w))))
+                                + sp.sqrt(T) * caw * (EZ.cross(w))))
     assert sp.simplify(total - expected) == sp.zeros(3, 1)
 
 

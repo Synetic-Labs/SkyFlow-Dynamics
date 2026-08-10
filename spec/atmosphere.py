@@ -10,7 +10,8 @@ JSBSim FGPropeller (advance-ratio model, explicit ρ scaling).
 
 import sympy as sp
 
-#: SI constants (USSA-1976).
+#: SI constants. R_DRY is the ICAO Doc 7488 / ISO 2533 value; USSA-1976's own constants
+#: (R* = 8.31432, M0 = 28.9644 g/mol) give 287.0531 — a 1e-6 relative difference.
 R_DRY = 287.0528    # J/(kg·K)
 GAMMA_AIR = sp.Rational(14, 10)
 G0 = 9.80665        # m/s²

@@ -92,8 +92,10 @@ def _sym(x):
     return [round(v, 12) for v in x]
 
 
-#: Crazyflie 2.0 reference vehicle (Forster 2015 identification, via RotorPy
-#: rotorpy/vehicles/crazyflie_params.py). spin = −rotor_directions (F-6 convention flip).
+#: Crazyflie 2.0 reference vehicle, via RotorPy rotorpy/vehicles/crazyflie_params.py.
+#: Provenance is mixed (per that file's own header): thrust coefficient inferred from
+#: 14.5 g at 2500 rad/s (bitcraze measurements / Forster 2015 lineage); k_d, k_z are RotorPy
+#: placeholder values ("k_drag is mostly made up"). spin = −rotor_directions (F-6 flip).
 _d = 0.043  # arm length, m
 _c45 = 0.70710678118
 CRAZYFLIE = {

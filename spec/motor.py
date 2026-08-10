@@ -27,8 +27,10 @@ def asymmetric_lag(W: sp.Matrix, W_c: sp.Matrix,
         Ω̇ = kd1·(Ω_c − Ω) + kd2·(Ω_c² − Ω²)   otherwise    (spin-down)
 
     Reduces exactly to first_order_lag with (ka1, ka2, kd1, kd2) = (1/τ_m, 0, 1/τ_m, 0).
-    ⚠ Crazyflow's identified coefficients are in RPM units — convert linear terms by 60/2π and
-    quadratic by (60/2π)² to rad/s.
+    ⚠ Crazyflow identifies this model on RPM-valued states. Because Ω̇ rescales along with Ω
+    (unlike the thrust polynomial, whose LHS is in N), the conversion is one factor lower per
+    Ω-power: ka1/kd1 (1/s) carry over UNCHANGED; ka2/kd2 convert by ×60/2π (i.e.
+    (60/2π)^(Ω-power − 1)).
     Source: crazyflow/dynamics/first_principles/dynamics.py:115–119 + params.toml.
     """
     def elem(w, wc):
@@ -47,8 +49,10 @@ def exact_exp_step(W0: sp.Matrix, W_c: sp.Matrix, dt: sp.Expr, tau_m: sp.Expr) -
 
     Unconditionally stable and monotone for any dt. In a differentiable simulator the per-step
     sensitivity ∂Ω(dt)/∂Ω₀ = e^(−dt/τ_m) ∈ (0,1) is a contraction, unlike the explicit-Euler
-    factor (1 − dt/τ_m) which exceeds 1 in magnitude once dt > 2τ_m. Only defined for the
-    linear lag (the asymmetric model has no closed form).
+    factor (1 − dt/τ_m) which exceeds 1 in magnitude once dt > 2τ_m.
+    Implemented for the linear lag only. (The asymmetric branches do admit a logistic/Riccati
+    closed form under ZOH — the active branch never switches within a step since Ω cannot
+    cross Ω_c — but it is not provided here.)
     Source: rpg_flightning (Heeg, Song, Scaramuzza, ICRA 2025).
     """
     return W_c + (W0 - W_c) * sp.exp(-dt / tau_m)
@@ -72,6 +76,8 @@ def pwm_quantize(u: sp.Expr, pwm_min: sp.Expr, pwm_max: sp.Expr) -> sp.Expr:
     """
     ESC PWM quantization: snap normalized throttle to the integer PWM grid,
         u_q = round(u · (pwm_max − pwm_min)) / (pwm_max − pwm_min).
+    Tie-breaking: written as floor(x + ½), i.e. round-half-UP — differs from banker's
+    rounding (numpy/python round) exactly at half-integer ties.
     ⚠ Piecewise-constant (zero gradient a.e.) — exclude from differentiable paths; treat as a
     harness-side command transformation. Source: Crazyflow params.toml (pwm 7000…65535).
     """

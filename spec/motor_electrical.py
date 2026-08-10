@@ -21,7 +21,12 @@ def dc_motor_speed_dynamics(W: sp.Expr, V_m: sp.Expr, J_r: sp.Expr, K_q: sp.Expr
     Linearized about Ω₀ this is the verified first-order lag with
         τ_m = J_r / (K_q·K_e/R_a + b + 2·k_m·Ω₀)                    (parameter bridge).
     Measured (Bangura ICRA 2014 Table I, mid-size BLDC): R_a = 0.07 Ω, L_a = 0.1 mH,
-    K_v = 950 RPM/V (K_e = 0.01005 V·s/rad), K_q0 = 0.0242 N·m/A, J_r = 5.38e-5 kg·m².
+    J_r = 5.38e-5 kg·m², K_q0 = 0.0242 N·m/A; the table also prints "950" for the back-EMF
+    constant (a K_v rating → K_e = 0.01005 V·s/rad). ⚠ The pair (K_q = 0.0242, K_e = 0.01005)
+    is internally inconsistent with this ideal-machine model, which requires K_q = K_e in SI
+    (air-gap power balance) — the printed pair implies 240% conversion efficiency. Pick ONE
+    (K_q = K_e = 0.0242, i.e. K_v ≈ 395 RPM/V, or K_e from K_v = 950) before identifying τ_m
+    numerically from these values.
     Source: Bangura, Lim, Kim, Mahony, ICRA 2014, Eqs. (11)–(15); Bangura & Mahony ACRA 2012
     Eqs. (6)–(7). JSBSim's torque-balance shaft dynamics is the same structure with table
     aerodynamic power.
@@ -80,7 +85,10 @@ def thevenin_battery(SOC: sp.Expr, i_batt: sp.Expr, V_TS: sp.Expr, V_TL: sp.Expr
 
     Fitted 850 mAh LiPo cell (Chen & Rincon-Mora 2006, Eqs. (2)–(7)):
     V_OC(SOC) = −1.031·e^(−35·SOC) + 3.685 + 0.2156·SOC − 0.1178·SOC² + 0.3201·SOC³.
-    Load coupling: i_batt = Σ motors (u·V_batt − K_e·Ω)/R_a + avionics. The Gazebo
+    Load coupling (ideal-inverter power balance V_batt·i_batt = V_m·i_m):
+    i_batt = Σⱼ uⱼ·(uⱼ·V_batt − K_e·Ωⱼ)/R_a + avionics — the motor current REFLECTED through
+    the duty cycle, not the motor current itself (using i_m directly overstates draw by 1/u).
+    The Gazebo
     LinearBatteryPlugin (de-facto drone-sim standard) is this with affine V_OC and the RC
     branches replaced by a low-passed current: V = e0 + e1·(1 − q/c) − r·ī.
     Returns (dSOC/dt, dV_TS/dt, dV_TL/dt, V_batt).

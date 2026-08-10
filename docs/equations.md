@@ -69,7 +69,7 @@ Separate spin-up/spin-down linear+quadratic rates.
 - **Parameters:** `ka1`, `ka2`, `kd1`, `kd2`
 - **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
-- **Notes:** Crazyflow coefficients are RPM-units — convert (60/2π per Ω power). Reduces to first-order at (1/τ, 0, 1/τ, 0).
+- **Notes:** Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces to first-order at (1/τ, 0, 1/τ, 0).
 
 ### `throttle_curve` — **verified**
 
@@ -132,7 +132,7 @@ OCV(SoC) + series R(SoC) + two RC branches; Gazebo linear model as special case.
 - **Defined in:** `spec.motor_electrical.thevenin_battery, spec.motor_electrical.chen_ocv`
 - **Sources:** Chen & Rincon-Mora — Accurate Electrical Battery Model Capable of Predicting Runtime and I-V Performance, IEEE Trans. Energy Conversion 21(2), 2006; gazebosim/gz-sim LinearBatteryPlugin.cc (linear OCV + internal resistance + current low-pass)
 - **Tests:** `properties/test_candidates.py`
-- **Notes:** Load coupling i = Σ(u·V_batt − K_e·Ω)/R_a closes the sag loop physically.
+- **Notes:** Load coupling i_batt = Σ u·(u·V_batt − K_e·Ω)/R_a (duty-reflected motor current, ideal-inverter power balance) closes the sag loop physically.
 
 
 ## Rotor aerodynamics
@@ -188,7 +188,7 @@ H_i = −Ω_i·diag(k_d,k_d,k_z)·v_i at each hub, v_i incl. ω×r_i lever arm.
 
 ### `blade_flapping_moment` — **verified**
 
-M_flap,i = −k_flap·Ω_i·(v_i × ẑ); pitch-up in forward flight.
+M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k_flap > 0.
 
 - **Defined in:** `spec.rotor_aero.flapping_moment`
 - **Parameters:** `k_flap`
@@ -213,7 +213,7 @@ T × (1 + k_angle·atan2(v_az, rΩ̄) + k_hor·atan2(‖v_axy‖, rΩ̄)).
 - **Parameters:** `k_angle`, `k_hor`, `r_prop`
 - **Sources:** SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
 - **Tests:** `properties/test_golden.py`
-- **Notes:** Identified to racing speeds: k_angle 3.145, k_hor 7.245 (mass-normalized k_w; F-4).
+- **Notes:** Identified to racing speeds: k_angle 3.145, k_hor 7.245 (mass-normalized k_w; F-4). Spec follows the runnable reference (ENU, mean Ω̄, hypot); the paper's printed equations differ (NED, ΣΩ, squared numerator) — see the function docstring.
 
 ### `vertical_climb_drag` — **verified**
 

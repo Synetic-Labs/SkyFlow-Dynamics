@@ -10,7 +10,7 @@
  "tolerance": 2e-05,
  "provenance": {
   "generator": "golden/generate/gen_skydreamer.py",
-  "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit \u2014 literal source exec'd with njit stubbed",
+  "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit \u2014 literal source exec'd with njit stubbed; dynamics block diff-verified identical to The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py (ENU)",
   "source_file": "/home/james/CODE/nav-jax/sims/skydreamer/skydreamer.py",
   "source_sha256": "761f133c42c798d5f20679e7a28d5f5813c5e8293d8c5e0ffaffd0cd1bed51f3",
   "date": "2026-08-10",

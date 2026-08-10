@@ -8,8 +8,8 @@ Tiers:
               validation against a runnable reference.
 
 Domains: rigid_body · actuator · rotor_aero · frame_aero · sensor · disturbance ·
-discretization · differentiation · harness (not physics — timing/stateful machinery, listed so
-nothing is lost).
+discretization · differentiation · environment · harness (not physics — timing/stateful
+machinery, listed so nothing is lost).
 
 The INTAKE.md protocol appends candidates here; promotion to verified requires golden vectors.
 """
@@ -120,8 +120,9 @@ TERMS = (
          "Separate spin-up/spin-down linear+quadratic rates",
          "spec.motor.asymmetric_lag", ("crazyflow",), ("ka1", "ka2", "kd1", "kd2"),
          ("properties/test_motor.py", "properties/test_golden.py"),
-         "Crazyflow coefficients are RPM-units — convert (60/2π per Ω power). Reduces to "
-         "first-order at (1/τ, 0, 1/τ, 0)."),
+         "Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry "
+         "over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces "
+         "to first-order at (1/τ, 0, 1/τ, 0)."),
     Term("motor_exact_exp_discretization", "verified", "discretization",
          "Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the RK stages",
          "spec.motor.exact_exp_step", ("flightning",), ("tau_m",),
@@ -173,7 +174,7 @@ TERMS = (
          ("k_d", "k_z"), ("properties/test_energy.py", "properties/test_golden.py"),
          "SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4)."),
     Term("blade_flapping_moment", "verified", "rotor_aero",
-         "M_flap,i = −k_flap·Ω_i·(v_i × ẑ); pitch-up in forward flight",
+         "M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k_flap > 0",
          "spec.rotor_aero.flapping_moment", ("rotorpy", "mahony2012"), ("k_flap",),
          ("properties/test_wrench.py", "properties/test_golden.py")),
     Term("translational_lift", "verified", "rotor_aero",
@@ -186,7 +187,9 @@ TERMS = (
          "T × (1 + k_angle·atan2(v_az, rΩ̄) + k_hor·atan2(‖v_axy‖, rΩ̄))",
          "spec.rotor_aero.aoa_thrust_factor", ("skydreamer",),
          ("k_angle", "k_hor", "r_prop"), ("properties/test_golden.py",),
-         "Identified to racing speeds: k_angle 3.145, k_hor 7.245 (mass-normalized k_w; F-4)."),
+         "Identified to racing speeds: k_angle 3.145, k_hor 7.245 (mass-normalized k_w; F-4). "
+         "Spec follows the runnable reference (ENU, mean Ω̄, hypot); the paper's printed "
+         "equations differ (NED, ΣΩ, squared numerator) — see the function docstring."),
     Term("vertical_climb_drag", "verified", "rotor_aero",
          "−k_v2·v_az·|v_az|·ẑ collective at CoM",
          "spec.rotor_aero.vertical_climb_drag", ("skydreamer",), ("k_v2",),
@@ -328,7 +331,8 @@ TERMS = (
          "spec.motor_electrical.thevenin_battery, spec.motor_electrical.chen_ocv",
          ("chen2006", "gazebo_battery"), (),
          ("properties/test_candidates.py",),
-         "Load coupling i = Σ(u·V_batt − K_e·Ω)/R_a closes the sag loop physically."),
+         "Load coupling i_batt = Σ u·(u·V_batt − K_e·Ω)/R_a (duty-reflected motor current, "
+         "ideal-inverter power balance) closes the sag loop physically."),
 
     # ---------------- candidates: wind / turbulence ----------------
     Term("dryden_turbulence", "candidate", "environment",
@@ -382,8 +386,11 @@ def validate_registry() -> None:
     from spec.parameters import SCHEMA
     keys = [t.key for t in TERMS]
     assert len(keys) == len(set(keys)), "duplicate term keys"
+    domains = ("rigid_body", "actuator", "rotor_aero", "frame_aero", "sensor", "disturbance",
+               "discretization", "differentiation", "environment", "harness")
     for t in TERMS:
         assert t.tier in ("verified", "candidate"), t.key
+        assert t.domain in domains, f"{t.key}: unknown domain {t.domain}"
         assert t.sources, f"{t.key} has no sources"
         for s in t.sources:
             assert s in SOURCES, f"{t.key}: unknown source {s}"
