@@ -59,6 +59,41 @@ SOURCES = {s.key: s for s in [
     Source("faessler2018", "Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor "
            "Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, "
            "IEEE RA-L 2018"),
+    Source("jsbsim", "JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), "
+           "commit 9a0b028", "https://github.com/JSBSim-Team/jsbsim"),
+    Source("mccormick", "McCormick — Aerodynamics, Aeronautics, and Flight Mechanics, 1st ed. "
+           "(momentum-theory induced velocity, Eq. 6.15)"),
+    Source("sanchez2017", "Sanchez-Cuevas, Heredia, Ollero — Characterization of the Aerodynamic "
+           "Ground Effect and Its Influence in Multirotor Control, Int. J. Aerospace Eng. 2017, "
+           "doi 10.1155/2017/1823056"),
+    Source("cheeseman1955", "Cheeseman & Bennett — The Effect of the Ground on a Helicopter "
+           "Rotor in Forward Flight, ARC R&M 3021, 1955"),
+    Source("pybullet_drones", "utiasDSL/gym-pybullet-drones BaseAviary (_groundEffect, "
+           "_downwash) + cf2x.urdf identified constants",
+           "https://github.com/utiasDSL/gym-pybullet-drones"),
+    Source("jain2019", "Jain, Fortmuller, Byun, Makiharju, Mueller — Modeling of aerodynamic "
+           "disturbances for proximity flight of multirotors, ICUAS 2019, Eqs. (1)-(8)"),
+    Source("bangura", "Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony "
+           "(ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for "
+           "Quadrotors (arXiv:1601.00733)"),
+    Source("kai2017", "Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors "
+           "exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)"),
+    Source("rotors_px4", "ethz-asl/rotors_simulator gazebo_motor_model.cpp + "
+           "PX4/PX4-SITL_gazebo-classic variant (signed rolling moment)",
+           "https://github.com/ethz-asl/rotors_simulator"),
+    Source("chen2006", "Chen & Rincon-Mora — Accurate Electrical Battery Model Capable of "
+           "Predicting Runtime and I-V Performance, IEEE Trans. Energy Conversion 21(2), 2006"),
+    Source("crazyflie_fw", "bitcraze/crazyflie-firmware — motors.c "
+           "motorsCompensateBatteryVoltage + platform_defaults_cf2.h (master and tag 2022.01)",
+           "https://github.com/bitcraze/crazyflie-firmware"),
+    Source("gazebo_battery", "gazebosim/gz-sim LinearBatteryPlugin.cc (linear OCV + internal "
+           "resistance + current low-pass)", "https://github.com/gazebosim/gz-sim"),
+    Source("mil8785c", "MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: "
+           "Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust"),
+    Source("ussa1976", "US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), "
+           "ideal-gas density"),
+    Source("neurobem", "Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid "
+           "Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)"),
 ]}
 
 
@@ -192,6 +227,124 @@ TERMS = (
          "Classical RK4; the differentiable reference integrator (adaptive solvers are not "
          "cleanly differentiable)", "spec.discretization.rk4_step", ("flightning", "rotorpy"),
          (), ("properties/test_motor.py", "properties/test_golden.py")),
+
+    # ---------------- candidates: ground effect / downwash ----------------
+    Term("ground_effect_cheeseman_bennett", "candidate", "rotor_aero",
+         "Single-rotor IGE thrust ratio 1/(1−(R/4z)²); forward-flight washout variant",
+         "spec.ground_effect.cheeseman_bennett, spec.ground_effect.cheeseman_bennett_forward",
+         ("cheeseman1955", "sanchez2017"), (),
+         ("properties/test_candidates.py",),
+         "Valid 0.5 ≤ z/R ≤ 2; singular at z = R/4 (clamp). Under-predicts for multirotors."),
+    Term("ground_effect_sanchez_cuevas", "candidate", "rotor_aero",
+         "Quadrotor IGE with mirrored-rotor images + fountain body-lift (K_b ≈ 2)",
+         "spec.ground_effect.sanchez_cuevas", ("sanchez2017",), (),
+         ("properties/test_candidates.py",),
+         "Significant to z ≈ 5R. Reduces to Cheeseman-Bennett as d, b → ∞, K_b → 0."),
+    Term("ground_effect_pybullet", "candidate", "rotor_aero",
+         "Per-rotor additive increment ΔT = T·G·(R/4z)² (linearized CB, identified G)",
+         "spec.ground_effect.pybullet_ground_effect", ("pybullet_drones",), (),
+         ("properties/test_candidates.py",),
+         "G = 11.37 identified for CF2 (fountain amplification folded in); needs height clip."),
+    Term("downwash_pybullet", "candidate", "disturbance",
+         "Inter-vehicle Gaussian downwash force fit (DSL/SiQi Zhou)",
+         "spec.ground_effect.pybullet_downwash_force", ("pybullet_drones",), (),
+         ("properties/test_candidates.py",),
+         "CF2-specific fit, thrust-independent, untrustworthy below Δz ≈ 0.7 m."),
+    Term("downwash_jain_jet", "candidate", "disturbance",
+         "Turbulent-jet wake velocity field + frame drag + per-rotor thrust loss",
+         "spec.ground_effect.jain_wake_velocity", ("jain2019",), (),
+         ("properties/test_candidates.py",),
+         "Thrust-scaled, gives force AND moment; ZEF only (z > 3L). Route wake velocity "
+         "through ONE rotor-inflow path to avoid double-counting with AoA thrust terms."),
+
+    # ---------------- candidates: inflow / propeller / atmosphere ----------------
+    Term("momentum_induced_velocity", "candidate", "rotor_aero",
+         "Actuator-disk induced velocity: hover v_h = √(T/2ρA); sign-safe axial closed form",
+         "spec.inflow.hover_induced_velocity, spec.inflow.induced_velocity_axial",
+         ("mccormick", "jsbsim", "bangura"), (),
+         ("properties/test_candidates.py",),
+         "The physical input behind ground effect / downwash / climb corrections."),
+    Term("oblique_momentum_thrust", "candidate", "rotor_aero",
+         "Nonlinear T(airspeed): T = 2ρA·v_i·U, U = √(Vx²+Vy²+(v_i−Vz)²) (implicit v_i)",
+         "spec.inflow.oblique_momentum_thrust", ("bangura",), (),
+         ("properties/test_candidates.py",),
+         "Principled model the identified k_v2/k_angle/k_hor terms linearize. VRS validity "
+         "band excluded (descent 0.5–2 v_h; spec.inflow VRS constants)."),
+    Term("dynamic_inflow_lag", "candidate", "rotor_aero",
+         "First-order induced-inflow lag to Glauert equilibrium, τ ≈ 16/(γΩ); exact-exp step",
+         "spec.inflow.dynamic_inflow_lag", ("jsbsim",), (),
+         ("properties/test_candidates.py",),
+         "Same operator-split pattern as the verified motor exact-exp discretization."),
+    Term("advance_ratio_tables", "candidate", "rotor_aero",
+         "T = C_T(J)·ρ·n²·D⁴, P = C_P(J)·ρ·n³·D⁵ with measured tables; windmilling via sign",
+         "spec.atmosphere.advance_ratio, spec.atmosphere.propeller_thrust",
+         ("jsbsim", "neurobem"), (),
+         ("properties/test_candidates.py",),
+         "Generalizes the polynomial T(Ω) (a fixed-J slice). J uses axial inflow only; "
+         "UIUC/APC databases supply tables for small UAV props. NeuroBEM's BEM model is the "
+         "higher-fidelity per-element variant."),
+    Term("isa_atmosphere", "candidate", "environment",
+         "USSA-1976 layered T(h), P(h); ρ = P/RT; thrust/torque scale linearly with ρ",
+         "spec.atmosphere.temperature_troposphere, spec.atmosphere.pressure_gradient_layer, "
+         "spec.atmosphere.density, spec.atmosphere.speed_of_sound",
+         ("ussa1976", "jsbsim"), (),
+         ("properties/test_candidates.py",),
+         "Verified-tier coefficients absorb ρ at identification altitude — scale by ρ/ρ_ident."),
+
+    # ---------------- candidates: rotor aero extensions ----------------
+    Term("rolling_moment", "candidate", "rotor_aero",
+         "Per-rotor rolling moment −Ω·s·μ_R·v_⊥ (advancing/retreating dissymmetry)",
+         "spec.rotor_aero.rolling_moment", ("rotors_px4", "kai2017"), (),
+         ("properties/test_candidates.py",),
+         "RotorS omits the spin sign (bug); PX4 variant adopted. Cancels for balanced pairs."),
+    Term("flapping_force_body_rate", "candidate", "rotor_aero",
+         "Kai Eq. (10) flapping force incl. spin-signed lateral and body-rate damping terms",
+         "spec.rotor_aero.flapping_force_kai", ("kai2017", "faessler2018"), (),
+         ("properties/test_candidates.py",),
+         "The published basis for the lumped linear drag; adds rotor-plane damping (B·ω) "
+         "absent from the verified tier."),
+
+    # ---------------- candidates: motor / battery electrical ----------------
+    Term("dc_motor_quasistatic", "candidate", "actuator",
+         "J_r·Ω̇ = (K_q/R_a)(V_m − K_e·Ω) − k_m·Ω² − b·Ω; τ_m bridge via linearization",
+         "spec.motor_electrical.dc_motor_speed_dynamics", ("bangura", "jsbsim"), (),
+         ("properties/test_candidates.py",),
+         "τ_m = J_r/(K_qK_e/R_a + b + 2k_mΩ₀) connects to the verified first-order lag."),
+    Term("esc_battery_coupling", "candidate", "actuator",
+         "V_m = u·V_batt; battery-coupled steady-state speed (√-like in u·V_batt)",
+         "spec.motor_electrical.esc_mean_voltage, spec.motor_electrical.steady_state_speed",
+         ("bangura", "crazyflie_fw"), (),
+         ("properties/test_candidates.py",),
+         "The physical origin of the verified throttle curve's √(k·u²+(1−k)·u) shape."),
+    Term("crazyflie_battery_compensation", "candidate", "actuator",
+         "Firmware cubic T(v_m) with Cardano inversion (+ legacy quadratic), PWM/V_batt scaling",
+         "spec.motor_electrical.crazyflie_thrust_from_voltage", ("crazyflie_fw",), (),
+         ("properties/test_candidates.py",),
+         "Identified C0–C3 per prop variant; thrust held constant under sag by design."),
+    Term("thevenin_battery", "candidate", "actuator",
+         "OCV(SoC) + series R(SoC) + two RC branches; Gazebo linear model as special case",
+         "spec.motor_electrical.thevenin_battery, spec.motor_electrical.chen_ocv",
+         ("chen2006", "gazebo_battery"), (),
+         ("properties/test_candidates.py",),
+         "Load coupling i = Σ(u·V_batt − K_e·Ω)/R_a closes the sag loop physically."),
+
+    # ---------------- candidates: wind / turbulence ----------------
+    Term("dryden_turbulence", "candidate", "environment",
+         "Dryden forming filters H_u/H_v/H_w + low-altitude scale/intensity closures",
+         "spec.wind.dryden_filter_u, spec.wind.dryden_filter_vw, "
+         "spec.wind.dryden_low_altitude_scales", ("mil8785c",), (),
+         ("properties/test_candidates.py",),
+         "⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs "
+         "1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET."),
+    Term("von_karman_turbulence", "candidate", "environment",
+         "von Kármán spectra (5/6, 11/6 exponents) + standard rational filter approximations",
+         "spec.wind.von_karman_psd_u", ("mil8785c",), (),
+         ("properties/test_candidates.py",),
+         "Measurement-preferred; no exact finite filter."),
+    Term("discrete_gust", "candidate", "environment",
+         "1-cosine discrete gust ramp per axis",
+         "spec.wind.one_minus_cosine_gust", ("mil8785c",), (),
+         ("properties/test_candidates.py",)),
 
     # ---------------- harness (tracked, not physics) ----------------
     Term("command_transport_delay", "verified", "harness",

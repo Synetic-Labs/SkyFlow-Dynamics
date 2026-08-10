@@ -96,6 +96,48 @@ def flapping_moment(W_i: sp.Expr, v_i: sp.Matrix, k_flap: sp.Expr) -> sp.Matrix:
     return -k_flap * W_i * cross(v_i, EZ)
 
 
+def rolling_moment(W_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, mu_R: sp.Expr) -> sp.Matrix:
+    """
+    CANDIDATE — per-rotor rolling moment from advancing/retreating blade lift dissymmetry:
+    a hub TORQUE parallel to the in-plane airspeed, sign set by spin direction:
+
+        M_roll,i = −Ω_i · s_i · μ_R · v_⊥,i,     v_⊥,i = v_i − (v_i·ẑ)ẑ
+
+    (PX4 SITL's signed variant of the RotorS gazebo_motor_model rolling moment; RotorS omits
+    the spin sign — a bug their forks fixed. Kai et al. 2017 Eq. (7) is the same physics with
+    √T_i scaling instead of Ω_i.) Cancels pairwise for balanced counter-rotating pairs at
+    equal speeds. μ_R: rolling_moment_coefficient, kg·m/rad.
+    Source: PX4-SITL_gazebo-classic gazebo_motor_model.cpp; ethz-asl/rotors_simulator;
+    Kai, Allibert, Hua, Hamel, IFAC 2017 Eq. (7).
+    """
+    v_perp = sp.Matrix([v_i[0], v_i[1], 0])
+    return -W_i * s_i * mu_R * v_perp
+
+
+def flapping_force_kai(T_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, w: sp.Matrix,
+                       c_av: sp.Expr, c_bv: sp.Expr, c_aw: sp.Expr,
+                       c_bw: sp.Expr) -> sp.Matrix:
+    """
+    CANDIDATE — blade-flapping FORCE with lateral (spin-signed) and body-rate components
+    (Kai et al. 2017 Eq. (10)), body frame:
+
+        F_flap,i = −√T_i·c_av·Π_ẑ·v_i + s_i·√T_i·c_bv·(ẑ×v_i)
+                   − s_i·√T_i·c_bw·Π_ẑ·ω − √T_i·c_aw·(ẑ×ω)
+
+    Π_ẑ = in-plane projector. The √T (≈√(mg/4) near hover) scaling is what makes the lumped
+    linear-drag model (spec.rotor_aero.linear_drag) exact at hover: the s_i-signed terms
+    cancel pairwise for counter-rotating rotors (Kai Remark 1), and the c_av term lumps into
+    A = 2√(mg)(c_d1 + c_av)·Π_ẑ — the published basis for Faessler's model. The body-rate
+    terms (c_aw, c_bw) are rotor-plane damping ABSENT from the verified tier.
+    Source: Kai, Allibert, Hua, Hamel, IFAC World Congress 2017, Eqs. (10)–(13).
+    """
+    v_perp = sp.Matrix([v_i[0], v_i[1], 0])
+    w_perp = sp.Matrix([w[0], w[1], 0])
+    rt = sp.sqrt(T_i)
+    return (-rt * c_av * v_perp + s_i * rt * c_bv * cross(EZ, v_i)
+            - s_i * rt * c_bw * w_perp - rt * c_aw * cross(EZ, w))
+
+
 def parasitic_drag(v_a: sp.Matrix, c_D: sp.Matrix) -> sp.Matrix:
     """
     Quadratic frame drag at the CoM (N):

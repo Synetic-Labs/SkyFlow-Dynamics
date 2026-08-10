@@ -17,3 +17,4 @@ Conventions (see README.md for the full statement):
 
 from spec import quaternion, frames, symbols, motor, rotor_aero, wrench, rigid_body  # noqa: F401
 from spec import dynamics, simplified, discretization, sensors, parameters, registry  # noqa: F401
+from spec import atmosphere, ground_effect, inflow, motor_electrical, wind  # noqa: F401
