@@ -1,8 +1,9 @@
 """
-Atmospheric turbulence — Dryden / von Kármán / discrete gusts — CANDIDATE tier.
+Atmospheric wind — Dryden / von Kármán turbulence, discrete gusts, mean-wind shear —
+CANDIDATE tier.
 
-Turbulence is an exogenous wind-velocity process: the outputs below superpose onto v_wind
-and enter the dynamics only through the airspeed v_a = Rᵀ(v − v_wind) (verified tier). The
+Wind is an exogenous velocity process: the outputs below superpose onto v_wind and enter
+the dynamics only through the airspeed v_a = Rᵀ(v − v_wind) (verified tier). The
 stochastic generation itself (white-noise driving, resample-and-hold) is harness-side; the
 math here is the published filter/spectrum definitions with all unit pitfalls stated.
 
@@ -73,6 +74,25 @@ def von_karman_psd_u(omega_spatial: sp.Expr, sigma_u: sp.Expr, L_u: sp.Expr) -> 
     Source: MIL-F-8785C.
     """
     return sigma_u**2 * (2 * L_u / sp.pi) / (1 + (1.339 * L_u * omega_spatial)**2)**sp.Rational(5, 6)
+
+
+def log_wind_shear(h: sp.Expr, W20: sp.Expr, z0: sp.Expr) -> sp.Expr:
+    """
+    MIL-F-8785C mean-wind (shear) profile — magnitude logarithmic in height AGL:
+
+        u_w(h) = W20 · ln(h/z0) / ln(20/z0),   valid 3 ft < h < 1000 ft (h, z0 in FEET —
+                                               the published fit is imperial, like the
+                                               low-altitude turbulence closures)
+
+    W20 = mean wind at 20 ft AGL — the same severity parameter that anchors the Dryden
+    intensities (σ_w = 0.1·W20), so shear and turbulence stay mutually calibrated.
+    z0 = surface roughness length: 0.15 ft (Category C landing phase), 2.0 ft otherwise.
+    Direction is constant with height; u_w superposes onto v_wind together with the
+    turbulence and gust outputs (the deterministic member of the 8785C triad).
+    Source: MIL-F-8785C para 3.7.3.3; reproduced in the MathWorks Aerospace Blockset
+    'Wind Shear Model' block documentation.
+    """
+    return W20 * sp.log(h / z0) / sp.log(20 / z0)
 
 
 def one_minus_cosine_gust(x: sp.Expr, V_m: sp.Expr, d_m: sp.Expr) -> sp.Expr:

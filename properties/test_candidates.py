@@ -4,7 +4,7 @@ terms, identities against their defining equations, and identified-parameter san
 import numpy as np
 import sympy as sp
 
-from spec import atmosphere, ground_effect, inflow, motor_electrical, rotor_aero, wind
+from spec import atmosphere, ground_effect, inflow, motor_electrical, quaternion, rotor_aero, wind
 from spec.frames import EZ
 
 z, R, d, b, V, v_i = sp.symbols("z R d b V v_i", positive=True)
@@ -319,3 +319,30 @@ def test_one_minus_cosine_gust_continuity():
     assert sp.simplify(sp.piecewise_fold(at0)) == 0 or at0 == 0
     assert sp.simplify(g.subs(x, dm) - Vm) == 0 or sp.simplify(
         (Vm / 2 * (1 - sp.cos(sp.pi))) - Vm) == 0
+
+
+def test_log_wind_shear_anchors():
+    # Anchors of the MIL-F-8785C log profile: u_w = W20 exactly at the 20 ft measurement
+    # height, zero at the roughness height z0, and monotone increasing in h (z0 < 20 ft).
+    h, W20, z0 = sp.symbols("h W20 z0", positive=True)
+    u = wind.log_wind_shear(h, W20, z0)
+    assert sp.simplify(u.subs(h, 20) - W20) == 0
+    assert sp.simplify(u.subs(h, z0)) == 0
+    assert sp.simplify(sp.diff(u, h) - W20 / (h * sp.log(20 / z0))) == 0
+
+
+# ---------------- discretization / integration ----------------
+
+def test_quaternion_norm_correction_dynamics():
+    # The ⊗ term is norm-orthogonal, so the exact norm dynamics are d‖q‖²/dt = 2K·ε·‖q‖²
+    # with ε = 1 − ‖q‖² — norm error decays for K > 0 instead of drifting.
+    q = sp.Matrix(sp.symbols("q_w q_x q_y q_z", real=True))
+    w = sp.Matrix(sp.symbols("w_x w_y w_z", real=True))
+    K = sp.Symbol("K", positive=True)
+    qdot = quaternion.kinematics_norm_corrected(q, w, K)
+    eps = 1 - quaternion.norm_squared(q)
+    assert sp.simplify(2 * q.dot(qdot) - 2 * K * eps * quaternion.norm_squared(q)) == 0
+    # On the unit manifold the correction vanishes: exactly the verified kinematics.
+    q_unit = sp.Matrix([1, 1, 1, 1]) / 2
+    residual = quaternion.kinematics_norm_corrected(q_unit, w, K) - quaternion.kinematics(q_unit, w)
+    assert sp.simplify(residual) == sp.zeros(4, 1)

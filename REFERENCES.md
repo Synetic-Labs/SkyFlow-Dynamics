@@ -643,6 +643,86 @@ Standard atmospheric turbulence for a small-multirotor simulator is fully specif
 - **Notes:** If ever needed, the honest multirotor analogue is sampling a spatially correlated field at each rotor position, not the fixed-wing gradient filters.
 
 
+## MathWorks Aerospace Blockset / Aerospace Toolbox / UAV Toolbox (documentation survey, 2026-08-11)
+
+Survey of the three MathWorks aerospace products for multirotor-relevant physics, from the
+public block/function documentation pages ONLY — the implementations are proprietary and were
+not consulted, cannot be ported, and cannot serve as golden references without a MATLAB
+license. Every relevant block documents the named public standard it implements; the
+licensing-clean path is to implement from those standards, which is what this repo already
+does. Net result: the products confirm the catalog far more than they extend it — most blocks
+map onto existing terms, and MathWorks has NO ground effect, no inter-vehicle downwash, no
+dynamic inflow, no motor electrical model, and no battery model (Simscape territory). Two
+adoptions (wind shear, quaternion norm correction); the rest recorded below so intake never
+re-litigates them.
+
+### MIL-F-8785C logarithmic wind shear ('Wind Shear Model' block) — **ADOPTED (candidate tier)**
+
+- **Equations:** u_w(h) = W20 * ln(h/z0) / ln(20/z0), valid 3 ft < h < 1000 ft, h and z0 in FEET (imperial fit, same trap as the low-altitude turbulence closures). W20 = mean wind at 20 ft AGL; z0 = 0.15 ft (Category C landing phase) or 2.0 ft (all other phases). Wind direction constant with height; magnitude-only profile.
+- **Source:** MIL-F-8785C para 3.7.3.3; reproduced in MathWorks 'Wind Shear Model' block documentation (mathworks.com/help/aeroblks/windshearmodel.html).
+- **Parameters:** Same W20 severity anchor as the Dryden intensity closures (light 15 kt, moderate 30 kt, severe 45 kt) — adopting it keeps mean wind and turbulence intensity mutually calibrated from one measurable parameter.
+- **Relevance:** The deterministic member of the 8785C wind triad (shear + turbulence + gust); was the one missing piece — the ledger already covers the other two. Spec: `spec.wind.log_wind_shear`, registry `wind_shear_log`.
+- **Notes:** Superposes onto v_wind exactly like the turbulence outputs; enters dynamics only through airspeed.
+
+### Quaternion kinematics norm-drift correction ('6DOF (Quaternion)' block) — **ADOPTED (candidate tier)**
+
+- **Equations:** qdot = (1/2)*Omega(omega)*q + K*eps*q with eps = 1 − (q_w^2+q_x^2+q_y^2+q_z^2), K >= 0 a normalization gain (1/s). The Omega term is norm-orthogonal, so d(||q||^2)/dt = 2*K*eps*||q||^2: norm error decays exponentially (rate ~2K near the unit manifold) instead of drifting under integration error. Identical to the verified kinematics on ||q|| = 1.
+- **Source:** MathWorks '6DOF (Quaternion)' block documentation (mathworks.com/help/aeroblks/6dofquaternion.html), which prints the exact form; textbook basis Stevens & Lewis, *Aircraft Control and Simulation*; Zipfel, *Modeling and Simulation of Aerospace Vehicle Dynamics* (standard flight-simulation practice, Lagrange-multiplier style constraint stabilization).
+- **Parameters:** K free; choose K*dt << 1 so the correction does not dominate the step.
+- **Relevance:** The registry pushed renormalization to the harness (post-step projection). This is the smooth in-ODE alternative: one differentiable vector field, no projection kink — directly useful for the planned fully differentiable dynamics/JAX backend. Spec: `spec.quaternion.kinematics_norm_corrected`, registry `quaternion_norm_correction`.
+- **Notes:** Post-step renormalization remains the default for non-differentiable paths; do not stack both corrections in one integrator.
+
+### Atmosphere blocks: ISA / Lapse Rate / COESA / Pressure Altitude — already covered
+
+- **Equations:** All four implement U.S. Standard Atmosphere 1976 (ISA per ISO 2533 is identical below 32 km; MathWorks cites only USSA-1976 even for its 'ISA' blocks). Lapse Rate page prints the exact troposphere/stratosphere forms already in `spec.atmosphere` (`isa_atmosphere` candidate). Pressure Altitude is the COESA pressure profile inverted.
+- **Source:** mathworks.com/help/aeroblks/{isaatmospheremodel,lapseratemodel,coesaatmospheremodel,pressurealtitude}.html; USSA-1976 (NASA-TM-X-74335).
+- **Notes:** The ISA block also offers Sutherland's-law viscosity mu = beta*T^(3/2)/(T+S) — not adopted; nothing in the catalog is Reynolds-dependent. Revisit only if a blade-element model with Re-dependent polars lands.
+
+### Turbulence blocks: Dryden (Continuous/Discrete), Von Karman, Discrete Wind Gust — already covered
+
+- **Equations:** Identical MIL-F-8785C / MIL-HDBK-1797 material already documented in this ledger (section above) and in `spec.wind`; the ledger already cites these exact doc pages as cross-checks. The blocks additionally expose the MIL-HDBK-1797B (2012) convention variant — same physics, same 2L bookkeeping as 1797.
+- **Source:** mathworks.com/help/aeroblks/{drydenwindturbulencemodelcontinuous,drydenwindturbulencemodeldiscrete,vonkarmanwindturbulencemodelcontinuous,discretewindgustmodel}.html.
+- **Notes:** Useful find in the blocks' reference lists: **NASA CR-1998-206937** (Yeager, 'Implementation and Testing of Turbulence Models for the F18-HARV Simulation', 1998) — a public NASA report containing a complete, independent discrete Dryden implementation with code listings. Free via NTRS. Use it as the independent cross-check when auditing the discrete-realization candidate (Tustin coefficients, driving-noise scaling, 8785C-vs-1797 length-scale conventions). It is a document, not runnable pinned code, so it cannot mint verified tier under this repo's rules — cross-check only.
+
+### 6DOF equations-of-motion blocks (Euler / Quaternion / Wind / ECEF / variable-mass variants) — already covered
+
+- **Equations:** Textbook rigid-body dynamics (Stevens & Lewis; Zipfel): F_b = m*(dV_b/dt + omega x V_b), M_b = I*domega/dt + omega x (I*omega) with full symmetric inertia — equivalent to the verified `newton_euler` + `quaternion_kinematics` after frame conversion (their body frame is FRD/NED). The quaternion variant's norm-correction term is the one new piece — adopted separately above.
+- **Notes:** ECEF (rotating round Earth, Coriolis/centripetal), wind-axes (alpha/beta states), and variable-mass variants are fixed-wing/launch-vehicle machinery — out of scope for a meters-AGL multirotor.
+
+### Rotor block (BEMT, Prandtl tip loss, quasi-steady Prouty flapping; R2023a+) — *skipped*
+
+- **Equations:** Momentum/blade-element annulus balance 4*F*lambda^2*r = (1/2)*sigma_s*cl_alpha*(theta(r)*r − lambda)*r solved iteratively per station; Prandtl tip loss F = (2/pi)*acos(exp(−f)), f = (Nb/2)*(1−r)/(r*phi); thrust/torque nondimensionalized helicopter-style (T = C_T*rho*pi*R^2*(Omega*R)^2); steady flap angles per Prouty ch. 7 tilt the thrust vector.
+- **Source:** mathworks.com/help/aeroblks/rotor.html; Prouty, *Helicopter Performance, Stability, and Control*; Leishman; Johnson. Validated by MathWorks against NACA TN-626.
+- **Relevance:** Overlaps existing candidates: static uniform-annulus inflow is WEAKER than `dynamic_inflow_lag`; the C_T/C_Q parameterization is the same physics as `advance_ratio_tables` in helicopter instead of propeller nondimensionalization; quasi-steady flapping is covered by the flapping candidates. NeuroBEM already holds the high-fidelity BEM slot.
+- **Notes:** The Prandtl tip-loss factor is the one reusable ingredient (public, Leishman/Prouty) — fold it in if a per-element BEMT term ever lands; not worth a standalone term.
+
+### UAV Toolbox guidance models (multirotor / fixed-wing) — *skipped*
+
+- **Equations:** Multirotor: point-mass translation m*xdd = [0;0;m*g] + R*[0;0;−F_thrust] plus INDEPENDENT PD loops on roll/pitch (pdot = Kp*(phi_c − phi) − Kd*p), P loop on yaw rate, first-order thrust lag — a closed-loop autopilot abstraction, cited to Mellinger & Michael IJRR 2012. Fixed-wing: Beard & McLain ch. 9 coordinated-turn kinematic model.
+- **Source:** mathworks.com/help/uav/ref/guidancemodel.html; multirotor/fixedwing objects idem.
+- **Relevance:** Not physics: the plant is a strict subset of the verified tier (no rotor aero, no drag, no motor dynamics beyond thrust lag) and the PD gains are control — harness-side by this repo's rules. The reduced-model role is already filled by the verified `point_mass_surrogate` (flightning), which was actually designed for gradient quality.
+
+### Gravity family (WGS84 Gravity, Spherical Harmonic EGM96/EGM2008, Zonal J2–J4, Centrifugal, geoidheight) — *skipped*
+
+- **Source:** NIMA TR8350.2 (WGS84); Lemoine (EGM96); Pavlis (EGM2008); mathworks.com/help/aeroblks/wgs84gravitymodel.html and siblings.
+- **Relevance:** Normal-gravity variation is ~0.5% equator-to-pole and ~3e-6 per 10 m altitude — orders below the identification noise of every coefficient in this catalog. Constant-g (parameter `grav`) is correct at multirotor scale. Orbit machinery, out of scope.
+
+### Upper-atmosphere / geophysical field family (CIRA-86, NRLMSISE-00, HWM07/14, non-standard day MIL-STD-210C/310) — *skipped*
+
+- **Source:** COSPAR CIRA-86 (NASA TM100697); NRL MSISE-00; NRL HWM07/HWM14 (Drob et al.); MIL-STD-210C / MIL-HDBK-310; mathworks.com/help/aeroblks/{cira86atmospheremodel,nrlmsise00atmospheremodel,horizontalwindmodel07,nonstandardday210c}.html.
+- **Relevance:** Thermosphere/climatic-extreme models for altitudes and use cases far outside a small multirotor's envelope. Off-nominal density days are already handled structurally: scale rotor coefficients by rho/rho_ident with rho from measured T, P (`isa_atmosphere` notes).
+
+### World Magnetic Model (WMM2000–WMM2025) / IGRF — *skipped (pointer)*
+
+- **Source:** NOAA/NGA WMM, public coefficients, 5-year epochs (default WMM2025); mathworks.com/help/aeroblks/worldmagneticmodel.html; `wrldmagm`/`igrfmagm`.
+- **Relevance:** `spec/sensors.py` holds only the IMU today — there is no magnetometer term for a field model to feed. ADOPT WHEN a magnetometer measurement model lands: WMM (or a constant local-field vector for indoor work) is the standard source of the reference field, and the coefficients are public.
+
+### Geodetic transforms and flight-parameter utilities (LLA/ECEF, flat-Earth, TAS/CAS/EAS correction, dynamic pressure, Mach, alpha/beta, compressible-flow relations, second-order servo actuators, Turbofan Engine System) — *skipped*
+
+- **Source:** WGS84 / ANSI/AIAA R-004-1992 (transforms); Lowry, Gracey NASA RP-1046 (airspeed); NACA Report 1135 (flow relations); Stevens & Lewis (aero forces/moments); mathworks.com/help/aeroblks/ various.
+- **Relevance:** Frame-boundary machinery (this repo keeps converters at the boundaries — golden generators, future backends), fixed-wing utilities, or generic servo/turbofan models with no multirotor content. `alphabeta`-style incidence quantities already appear inside the AoA thrust terms where needed.
+
+
 ## Prior evaluations (2026-07, RotorPy cross-validation phase)
 
 - **RotorPy (spencerfolk/rotorpy, branch research-additions)** — the primary verified

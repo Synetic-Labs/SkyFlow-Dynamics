@@ -72,6 +72,24 @@ def kinematics(q: sp.Matrix, omega_body: sp.Matrix) -> sp.Matrix:
     return product(q, sp.Matrix([0, omega_body[0], omega_body[1], omega_body[2]])) / 2
 
 
+def kinematics_norm_corrected(q: sp.Matrix, omega_body: sp.Matrix, K: sp.Expr) -> sp.Matrix:
+    """
+    Kinematics with Lagrange-multiplier norm-drift stabilization (gain K ≥ 0, units 1/s):
+
+        q̇ = ½ · q ⊗ (0, ω_B) + K·ε·q,    ε = 1 − ‖q‖²
+
+    The ⊗ term is norm-orthogonal (qᵀ(q ⊗ (0, ω)) = 0), so d‖q‖²/dt = 2K·ε·‖q‖²: under
+    integration error the norm no longer drifts but decays back to 1 (rate ≈ 2K near the
+    unit manifold). Reduces to kinematics() exactly on ‖q‖ = 1. This is the smooth,
+    differentiable alternative to post-step renormalization (harness-side today) — the
+    correction stays inside the ODE, so backends that differentiate through the integrator
+    see a single smooth vector field. Choose K·dt ≪ 1 or the correction dominates the step.
+    Sources: standard flight-simulation practice (Stevens & Lewis; Zipfel); exact form as
+    printed in the MathWorks Aerospace Blockset '6DOF (Quaternion)' block documentation.
+    """
+    return kinematics(q, omega_body) + K * (1 - norm_squared(q)) * q
+
+
 def from_rotation_vector(phi: sp.Matrix) -> sp.Matrix:
     """
     Exponential map: rotation vector φ (rad, axis·angle) → unit quaternion

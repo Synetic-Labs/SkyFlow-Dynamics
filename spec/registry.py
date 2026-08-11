@@ -102,6 +102,10 @@ SOURCES = {s.key: s for s in [
            "ideal-gas density"),
     Source("neurobem", "Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid "
            "Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)"),
+    Source("mathworks_aeroblks", "MathWorks Aerospace Blockset documentation — block-equation "
+           "pages only (implementations are proprietary and were not consulted); each block "
+           "cites the public standard it implements",
+           "https://www.mathworks.com/help/aeroblks/"),
 ]}
 
 
@@ -382,6 +386,25 @@ TERMS = (
          "1-cosine discrete gust ramp per axis",
          "spec.wind.one_minus_cosine_gust", ("mil8785c",), (),
          ("properties/test_candidates.py",)),
+    Term("wind_shear_log", "candidate", "environment",
+         "MIL-F-8785C mean-wind log profile u_w = W20·ln(h/z0)/ln(20/z0) (h, z0 in ft)",
+         "spec.wind.log_wind_shear", ("mil8785c", "mathworks_aeroblks"), (),
+         ("properties/test_candidates.py",),
+         "The deterministic member of the 8785C wind triad (shear + turbulence + gust); "
+         "superposes onto v_wind. Valid 3–1000 ft AGL; z0 = 0.15 ft (Category C landing) "
+         "or 2.0 ft (otherwise). Anchored to the same W20 as the Dryden closures, so mean "
+         "wind and turbulence intensity stay mutually calibrated."),
+
+    # ---------------- candidates: discretization / integration ----------------
+    Term("quaternion_norm_correction", "candidate", "discretization",
+         "q̇ = ½ q ⊗ (0, ω) + K·(1−‖q‖²)·q — smooth Lagrange-style norm stabilization",
+         "spec.quaternion.kinematics_norm_corrected", ("mathworks_aeroblks",), (),
+         ("properties/test_candidates.py",),
+         "Differentiable alternative to the harness's post-step renormalization: the "
+         "correction lives inside the ODE (single smooth vector field for backends that "
+         "differentiate through the integrator). d‖q‖²/dt = 2K·ε·‖q‖², ε = 1−‖q‖² → norm "
+         "error decays at rate ≈ 2K; exactly quaternion.kinematics on the unit manifold. "
+         "Textbook basis: Stevens & Lewis; Zipfel. Choose K·dt ≪ 1."),
 
     # ---------------- harness (tracked, not physics) ----------------
     Term("command_transport_delay", "verified", "harness",

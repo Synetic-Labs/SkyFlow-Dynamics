@@ -418,6 +418,15 @@ Classical RK4; the differentiable reference integrator (adaptive solvers are not
 - **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
 
+### `quaternion_norm_correction` — *candidate*
+
+q̇ = ½ q ⊗ (0, ω) + K·(1−‖q‖²)·q — smooth Lagrange-style norm stabilization.
+
+- **Defined in:** `spec.quaternion.kinematics_norm_corrected`
+- **Sources:** MathWorks Aerospace Blockset documentation — block-equation pages only (implementations are proprietary and were not consulted); each block cites the public standard it implements
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** Differentiable alternative to the harness's post-step renormalization: the correction lives inside the ODE (single smooth vector field for backends that differentiate through the integrator). d‖q‖²/dt = 2K·ε·‖q‖², ε = 1−‖q‖² → norm error decays at rate ≈ 2K; exactly quaternion.kinematics on the unit manifold. Textbook basis: Stevens & Lewis; Zipfel. Choose K·dt ≪ 1.
+
 
 ## Differentiable simulation
 
@@ -466,6 +475,15 @@ von Kármán spectra (5/6, 11/6 exponents) + standard rational filter approximat
 - **Defined in:** `spec.wind.one_minus_cosine_gust`
 - **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust
 - **Tests:** `properties/test_candidates.py`
+
+### `wind_shear_log` — *candidate*
+
+MIL-F-8785C mean-wind log profile u_w = W20·ln(h/z0)/ln(20/z0) (h, z0 in ft).
+
+- **Defined in:** `spec.wind.log_wind_shear`
+- **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust; MathWorks Aerospace Blockset documentation — block-equation pages only (implementations are proprietary and were not consulted); each block cites the public standard it implements
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** The deterministic member of the 8785C wind triad (shear + turbulence + gust); superposes onto v_wind. Valid 3–1000 ft AGL; z0 = 0.15 ft (Category C landing) or 2.0 ft (otherwise). Anchored to the same W20 as the Dryden closures, so mean wind and turbulence intensity stay mutually calibrated.
 
 
 ## Harness (timing & stateful machinery — not physics)
@@ -523,6 +541,7 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **mil8785c**: MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust
 - **ussa1976**: US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), ideal-gas density
 - **neurobem**: Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)
+- **mathworks_aeroblks**: MathWorks Aerospace Blockset documentation — block-equation pages only (implementations are proprietary and were not consulted); each block cites the public standard it implements — <https://www.mathworks.com/help/aeroblks/>
 
 ## Reviewed and excluded
 
