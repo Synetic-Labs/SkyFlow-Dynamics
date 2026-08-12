@@ -29,7 +29,7 @@ expressions, and every backend runs the same golden + property suite.
 | `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
 | `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
 | `INTAKE.md` | The protocol for evaluating a new paper/repo against the registry. |
-| `backends/` | *(later)* generated adapters: `jax.py` first. |
+| `backends/` | Generated adapters — `backends/jax.py` (live): the spec emitted to JAX via `sympy.lambdify`, validated by the same golden + property suites (`properties/test_backend_jax.py`). |
 | `harness/` | *(later, TBD)* the discrete/stateful simulation layer (command delay lines, ZOH control rates, disturbance resampling, RNG) — deliberately **not** part of the math spec. |
 
 ## Canonical conventions
@@ -65,6 +65,34 @@ Every term in `spec/registry.py` carries a tier:
 uv sync
 uv run pytest
 ```
+
+## JAX backend
+
+`backends/jax.py` is not handwritten physics: every dynamics function is code-generated from
+the SymPy spec on first use and pinned by the same golden vectors as the spec itself
+(`properties/test_backend_jax.py`). Install with the extra (`uv sync --extra jax`; the dev
+group already includes it), then:
+
+```python
+import jax, jax.numpy as jnp
+from backends import jax as skyflow
+from spec.parameters import CRAZYFLIE
+
+p    = skyflow.pack_params(CRAZYFLIE)          # golden-file param dict → flat vector
+f    = skyflow.statedot_fn()                   # ṡ = f(s, u, p)   (n=4, first-order motor)
+step = skyflow.rk4_step_fn()                   # s⁺ = step(s, u, p, dt), raw integrator
+roll = jax.jit(skyflow.make_rollout(step, 0.0, 2500.0))   # lax.scan trajectory
+
+fleet_f = jax.jit(jax.vmap(f, in_axes=(0, None, None)))   # batched vehicles
+```
+
+Everything is a pure single-vehicle function over the canonical flat vectors (`state_slices`
+/ `input_slices` give the block layout): compose `jax.jit` / `jax.vmap` / `jax.grad`
+yourself. Precision follows the ambient JAX config — enable x64 to reproduce the golden
+vectors at their 1e-9 tolerances; float32 is the usual RL-rollout choice. The discrete
+harness (command delay, control-rate ZOH, disturbance schedules) stays out of the backend
+by design; `post_step` / `make_rollout` replicate only the reference post-step the golden
+step vectors pin (quaternion renormalization, rotor-speed clipping).
 
 ## Regenerating golden vectors
 
