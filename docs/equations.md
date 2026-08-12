@@ -450,14 +450,14 @@ USSA-1976 layered T(h), P(h); ρ = P/RT; thrust/torque scale linearly with ρ.
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** Verified-tier coefficients absorb ρ at identification altitude — scale by ρ/ρ_ident.
 
-### `dryden_turbulence` — *candidate*
+### `dryden_turbulence` — **verified**
 
 Dryden forming filters H_u/H_v/H_w + low-altitude scale/intensity closures.
 
 - **Defined in:** `spec.wind.dryden_filter_u, spec.wind.dryden_filter_vw, spec.wind.dryden_low_altitude_scales`
-- **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** ⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs 1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET.
+- **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust; Yeager — Implementation and Testing of Turbulence Models for the F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source (sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run statistics
+- **Tests:** `properties/test_candidates.py`, `properties/test_dryden_authenticity.py`
+- **Notes:** ⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs 1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET. Verified via the ARCHAIC-SOURCE EXCEPTION (2026-08-11): the golden data are NASA CR-1998-206937's published run statistics (pinned PDF, transcribed tables + listing), not vectors from executed code — the reference is ACSL (no runnable interpreter) with an irreproducible RNG. Proven: the report's Tustin difference equations are exactly the prewarped bilinear of these filters, and re-simulating them reproduces Tables 2-7 calibration (σ, u/v/w) within the published spread at L = 1750 ft, V ∈ {100, 1000} ft/s. The low-altitude closures are NOT exercised by those runs and remain literature-tier.
 
 ### `von_karman_turbulence` — *candidate*
 
@@ -542,6 +542,7 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **ussa1976**: US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), ideal-gas density
 - **neurobem**: Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)
 - **mathworks_aeroblks**: MathWorks Aerospace Blockset documentation — block-equation pages only (implementations are proprietary and were not consulted); each block cites the public standard it implements — <https://www.mathworks.com/help/aeroblks/>
+- **cr206937**: Yeager — Implementation and Testing of Turbulence Models for the F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source (sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run statistics — <https://ntrs.nasa.gov/citations/19980028448>
 
 ## Reviewed and excluded
 

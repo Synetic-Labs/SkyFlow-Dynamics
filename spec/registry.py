@@ -106,6 +106,10 @@ SOURCES = {s.key: s for s in [
            "pages only (implementations are proprietary and were not consulted); each block "
            "cites the public standard it implements",
            "https://www.mathworks.com/help/aeroblks/"),
+    Source("cr206937", "Yeager — Implementation and Testing of Turbulence Models for the "
+           "F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source "
+           "(sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run "
+           "statistics", "https://ntrs.nasa.gov/citations/19980028448"),
 ]}
 
 
@@ -370,13 +374,21 @@ TERMS = (
          "ideal-inverter power balance) closes the sag loop physically."),
 
     # ---------------- candidates: wind / turbulence ----------------
-    Term("dryden_turbulence", "candidate", "environment",
+    Term("dryden_turbulence", "verified", "environment",
          "Dryden forming filters H_u/H_v/H_w + low-altitude scale/intensity closures",
          "spec.wind.dryden_filter_u, spec.wind.dryden_filter_vw, "
-         "spec.wind.dryden_low_altitude_scales", ("mil8785c",), (),
-         ("properties/test_candidates.py",),
+         "spec.wind.dryden_low_altitude_scales", ("mil8785c", "cr206937"), (),
+         ("properties/test_candidates.py", "properties/test_dryden_authenticity.py"),
          "⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs "
-         "1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET."),
+         "1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET. Verified via "
+         "the ARCHAIC-SOURCE EXCEPTION (2026-08-11): the golden data are NASA "
+         "CR-1998-206937's published run statistics (pinned PDF, transcribed tables + "
+         "listing), not vectors from executed code — the reference is ACSL (no runnable "
+         "interpreter) with an irreproducible RNG. Proven: the report's Tustin difference "
+         "equations are exactly the prewarped bilinear of these filters, and re-simulating "
+         "them reproduces Tables 2-7 calibration (σ, u/v/w) within the published spread at "
+         "L = 1750 ft, V ∈ {100, 1000} ft/s. The low-altitude closures are NOT exercised "
+         "by those runs and remain literature-tier."),
     Term("von_karman_turbulence", "candidate", "environment",
          "von Kármán spectra (5/6, 11/6 exponents) + standard rational filter approximations",
          "spec.wind.von_karman_psd_u", ("mil8785c",), (),

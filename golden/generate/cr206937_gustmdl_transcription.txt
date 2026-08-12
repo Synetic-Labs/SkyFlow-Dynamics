@@ -1,0 +1,1053 @@
+Transcription of the GUSTMDL program listing, NASA CR-1998-206937
+==================================================================
+
+Source: Yeager, "Implementation and Testing of Turbulence Models for the F18-HARV
+Simulation", NASA/CR-1998-206937, March 1998. NTRS 19980028448.
+PDF sha256: 4f63d46d3eac9568239941e943b98a59e1444d05b622760eaf8f07a0c1b82686
+Report pages 11-30 (PDF pages 15-34). Transcribed 2026-08-11 from the scanned images
+(no text layer in the PDF). This file is the audit trail for
+golden/vectors/dryden_cr206937_tables.json and properties/test_dryden_authenticity.py.
+
+Fidelity notes:
+- All code content, identifiers, numbers, and operators are exact as printed; casing
+  preserved (the source mixes upper/lower case).
+- Exact star/dash counts in "!****" / "!----" banner lines cannot be resolved at scan
+  resolution; banners are reproduced at representative width. No other approximations.
+- "RESONSE" (p11), the bare date "5-9-97" without comment delimiter (p18), and the
+  inconsistent "!5-12-97" vs "! 5-12-97" (pp19-20) are as printed in the original.
+- Report p13: Table 1 (report p10) prints BWING's value with a glyph readable as 32.4;
+  the code listing reads 37.4, and the tables' sigma_p = 1.9*sigma_w/sqrt(TURBL*BWING)
+  = 0.0371 confirms 37.4 (32.4 would give 0.0399). 37.4 ft is the F-18 wingspan.
+- The listing is one ACSL program with FORTRAN subroutines appended (WSTATS, ASCFM).
+  Continuation character in ACSL free-form is "&"; in the FORTRAN subroutines it is a
+  character in column 6 ("*").
+
+--- report page 11 (pdf page 15) ---
+PROGRAM GUSTMDL
+!
+!*****************************************************************
+!
+!              MACRO SECTION
+!
+!**********************************************************************!
+!
+!--------------------------------------------------------------------
+!   RMS CALCULATES THE RMS RESONSE OF A RANDOM VARIABLE.
+!--------------------------------------------------------------------
+MACRO RMS(RMSX ,X ,TIV )
+MACRO REDEFINE MSX ,MSXD ,MSXI
+MACRO REDEFINE MSXL,EPS
+         CONSTANT MSXI = 0.
+         CONSTANT EPS  = 1.E-22
+         MSXD     = TIV*(X**2 - MSX)
+         MSX      = INTVC(MSXD ,MSXI)
+         MSXL     = MAX( MSX ,  EPS )
+         RMSX     = SQRT(MSXL)
+MACRO EXIT
+MACRO END
+
+!--------------------------------------------------------------------
+!   INVERTS TIME.  USES 1/MINSTP IF TIME = ZERO.
+!--------------------------------------------------------------------
+MACRO INVERT(TIV,T,MINSTP)
+MACRO RELABEL L1,L2
+PROCEDURAL(TIV=T)
+      IF(T.EQ.0.) GOTO L1
+        TIV=1./T
+        GOTO L2
+      L1..CONTINUE
+        TIV=1./MINSTP
+      L2..CONTINUE
+END ! of procedural
+MACRO EXIT
+MACRO END
+!
+
+--- report page 12 (pdf page 16) ---
+!**********************************************************************!
+MACRO DRMS(RMSX, MNX , X, N )
+!**********************************************************************!
+!
+!     MACRO TO COMPUTE SAMPLE STATISTICS OF RANDOM VARIABLE
+!               WTB, JCY 2-24-94
+!
+MACRO REDEFINE SUM, SUMSQ, EPS
+         CONSTANT  SUM = 0., SUMSQ = 0.
+         CONSTANT EPS  = 1.E-22
+         SUM = SUM + X
+         SUMSQ = SUMSQ + X*X
+         MNX   = SUM/N
+         RMSX  = SQRT(MAX((SUMSQ - MNX*SUM)/(MAX(N-1.,EPS)),0.))
+MACRO EXIT
+MACRO END
+!
+!**********************************************************************!
+MACRO XCORR(XCOR, MXM , X, Y, N, NTAU )
+!**********************************************************************!
+!
+!     MACRO TO COMPUTE SAMPLE CROSS-CORRELATION OF RANDOM VARIABLE
+!               WTB, JCY 6-2-97
+!
+MACRO REDEFINE SUMXY, SUMX, SUMY, MNX, MNY, NS, XDLY, YDLY, NDLY, I
+  REAL XDLY(100)
+MACRO RELABEL LDLY
+  IF (N .LT. NTAU + 1)   THEN
+      NDLY = N
+  ELSE
+      NDLY = NTAU + 1
+  ENDIF
+  DO LDLY I = 1, NDLY - 1
+      XDLY(NDLY+1-I) = XDLY(NDLY-I)
+LDLY.. CONTINUE
+!  END
+      XDLY(1) = X
+  CONSTANT  SUMXY = 0., SUMX = 0., SUMY = 0., NS = 0
+  IF (N .GE. NTAU + 1)   THEN
+     NS = NS + 1
+     SUMXY = SUMXY + XDLY(NDLY)*Y
+      SUMX = SUMX + XDLY(NDLY)
+      SUMY = SUMY + Y
+      MNX  = SUMX/NS
+      MNY  = SUMY/NS
+      MXM  = MNX * MNY
+      XCOR = SUMXY/NS - MXM
+  ENDIF
+MACRO EXIT
+MACRO END
+
+!**********************************************************************!
+INITIAL
+!**********************************************************************!
+
+--- report page 13 (pdf page 17) ---
+     ALGORITHM IALG    = 4
+     CINTERVAL CINT    = 0.1
+     MAXTERVAL MXSTP   = 0.0125
+     NSTEPS    NSTP    = 1
+     INTEGER   PAGSIZ
+     CONSTANT  PAGSIZ = 55
+
+     CONSTANT  TSTP    = 100.0
+     PI     = ACOS(-1.)
+
+     INTEGER NUMOUT      $ !DETERMINES FREQ OF DATA OUTPUT FOR ASC!
+     CONSTANT  NUMOUT    = 1
+
+     CONSTANT SAMPS = 0.
+     CONSTANT EPSLON = 1.E-22
+
+     CONSTANT SDNOIS    = 1.,      &
+              TSAMP     = .0125,   &
+              TURBL     = 1750.,   &
+              TURBSIG   = 5.,      &
+              TURBU0    = 0.,      &
+              TURBXVD0  = 0.,      &
+              TURBXV0   = 0.,      &
+              TURBXWD0  = 0.,      &
+              TURBXW0   = 0.
+!
+     CONSTANT TURBNU    = 0.,      &
+              TURBNV    = 0.,      &
+              TURBNW    = 0.,      &
+              FILNU     = 0.,      &
+              FILNV     = 0.,      &
+              FILNW     = 0.
+!
+     CONSTANT TURBR0    = 0.,      &
+              TURBQ0    = 0.,      &
+              TURBP0    = 0.,      &
+              BWING     = 37.4
+!
+     CONSTANT TURBXQ0   = 0.,      &
+              TURBXR0   = 0.
+!
+!   irseed should be pos, odd, integer, 8 digits
+!
+     INTEGER IRSEED
+     CONSTANT IRSEED =  28545269
+     GAUSI( IRSEED  )
+!
+     SIGU = TURBSIG                                   ! same as sigv,sigw
+     SIGV = TURBSIG
+     SIGW = TURBSIG
+     SIGP = 1.9 / SQRT(TURBL * BWING) * SIGW          ! eq.8
+!
+!   APPROXIMATIONS OF EXPECTED VALUES OF STD. DEV.(P AND R COMPONENTS)
+
+--- report page 14 (pdf page 18) ---
+!
+     SIGQ = SQRT(pi/(2.*TURBL * BWING)) * SIGW      ! eq.14
+     SIGR = SQRT(2.*pi/(3.*TURBL * BWING)) * SIGW   ! eq.17
+!
+     CONSTANT VTOT = 400.                   !    VTOT = VELOCITY, FT/SEC
+!
+! use turbl= 1750.   for Lu, Lv, Lw
+! use tau for tauu, tauv, tauvw
+!
+     TAU = TURBL/VTOT                                         ! eq.3,4,6
+     TAUQ = 4.0 * BWING /(PI * VTOT)                          ! eq.13
+     TAUR = 3.0 * BWING /(PI * VTOT)                          ! eq.16
+!
+     LP =  SQRT(TURBL * BWING) / 2.6                          ! eq.10
+     TAUP = LP/VTOT                                           ! eq.13
+
+     TURBOMEGA = VTOT/TURBL          ! same as 1./TAU,1./TAUV,1./TAUW
+     WP = VTOT/LP                    ! same as 1./TAUP
+!
+!   CONSTANTS FOR CALCULATIONS OF CONTINUOUS W AND V          ! eq. 1,2
+!
+     TURBK2U  = TURBSIG*SQRT(2.*TURBOMEGA/TSAMP)
+        K2P   = SIGP * SQRT(2. * WP/TSAMP)
+     TURBK1VW = 2.*TURBOMEGA
+     TURBK2VW = TURBOMEGA*TURBOMEGA
+     TURBK3VW = TAU*SQRT(3.)
+     TURBK4VW = TURBSIG*SQRT(TURBOMEGA**3/TSAMP)
+!
+!**********************************************************************!
+!   CONSTANTS FOR CALCULATIONS of TURBULENCE VIA TUSTIN TRANSFORM
+!
+     TWOPIOVTNU = SQRT(2.*PI/TSAMP)
+!
+!**********************************************************************!
+!      U-COMPONENT
+!**********************************************************************!
+!
+!    constants used in eq.18
+!
+     KFIL  = TURBSIG* SQRT(1./ (PI * TURBOMEGA))
+     CFIL  = TURBOMEGA/ TAN(TURBOMEGA*TSAMP/2.)        ! eq.19
+     FILK1 = (TURBOMEGA - CFIL)/(TURBOMEGA + CFIL)
+     FILK2 = KFIL /(1. + (CFIL/TURBOMEGA))
+     FILK3 = SQRT(PI * (TURBOMEGA + CFIL))/SDNOIS
+!
+!**********************************************************************!
+!      V-COMPONENT and W-COMPONENT
+!**********************************************************************!
+!
+!    constants used in eq.20
+!
+     KVW = SQRT(3.*TURBOMEGA/(2.*PI))
+     WNPC = TURBOMEGA + CFIL
+     FILK4 = 2.*(TURBOMEGA*TURBOMEGA - CFIL*CFIL)/(WNPC*WNPC)
+
+--- report page 15 (pdf page 19) ---
+     FILK5 = (TURBOMEGA - CFIL)*(TURBOMEGA - CFIL)/(WNPC*WNPC)
+     FILK6 = CFIL + TURBOMEGA/SQRT(3.)
+     FILK7 = 2.*TURBOMEGA/SQRT(3.)
+     FILK8 = TURBOMEGA/SQRT(3.) - CFIL
+     FILK9 = KVW*TURBSIG / (WNPC*WNPC)
+!
+!used in eq.90
+!
+     KFILD1  = TURBSIG*SQRT(2.*TAU/TSAMP)
+!
+!   potential alternate   (filwd2, filvd2)
+!
+     KWD1  = (1. - TAU*CFIL)/(1. + TAU*CFIL)
+     KWD2  = TURBSIG*SQRT(TAU/TSAMP)*CFIL/(1.+TAU*CFIL)**2
+     CTWSR3 = SQRT(3.)*TAU*CFIL
+!
+!**********************************************************************!
+!   P-COMPONENT
+!**********************************************************************!
+!
+!    used in eq.21
+!
+     PFIL  = SIGP* SQRT(2./  (TSAMP * WP))
+     PCFIL = WP / TAN(  WP      *TSAMP/2.)             ! eq.22
+     PK1   = (WP - PCFIL) / (WP + PCFIL)
+     PK2   = PFIL /(1. + (PCFIL/WP))
+!**********************************************************************!
+!      Q-COMPONENT and R-COMPONENT
+!**********************************************************************!
+!
+!    used in eq.23
+!
+     CFILQ = (1. / TAUQ) / TAN(TSAMP / (2. * TAUQ))    ! eq. 24
+     QK1   = (1. - CFILQ * TAUQ) / (1. + CFILQ * TAUQ)
+     QK2   = (CFILQ / VTOT) / (1. + CFILQ * TAUQ)
+!
+!    used in eq.25
+!
+     CFILR = (1. / TAUR) / TAN(TSAMP / (2. * TAUR))    ! eq. 26
+     RK1   = (1. - CFILR * TAUR) / (1. + CFILR * TAUR)
+     RK2   = (CFILR / VTOT) / (1. + CFILR * TAUR)
+!
+!**********************************************************************!
+!
+!    constants for MIL STD calcs                       8-28-97
+!
+!    used in eqs. 30 - 35
+!
+     tovtau = tsamp/tau         !(for u,w,v)
+     tovtau2= 2.* tovtau
+     tovtau4= 4.* tovtau
+     tovtaup = tsamp/taup       !(for p)
+     tovtaup2= 2.* tovtaup
+     tovtauq = tsamp/tauq       !(for q)
+
+--- report page 16 (pdf page 20) ---
+     tovtaur = tsamp/taur       !(for q)
+     milk1 = (1. - tovtau)      !(for u,w,v)
+     milk2 = (1. - tovtau2)
+     milk3 = sqrt(tovtau2)
+     milk4 = sqrt(tovtau4)
+     milk5 = (1. - tovtaup)     !(for p)
+     milk6 = sqrt(tovtaup2)
+     milk7 = (1. - tovtauq)     !(for q)
+     milk8 = (1. - tovtaur)     !(for r)
+     piov4b=pi/(4.*bwing)
+     piov3b=pi/(3.*bwing)
+!
+!**********************************************************************!
+!
+END     ! OF INITIAL !
+
+!**********************************************************************!
+   DYNAMIC
+!**********************************************************************!
+!**********************************************************************!
+   DERIVATIVE
+!**********************************************************************!
+!
+!     CONTINUOUS TURBULENCE MODEL     WTB, JCY 2-24-94 through 11-30-97
+!
+!**********************************************************************!
+!     U - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.5
+!
+      TURBUD = - TURBOMEGA * TURBU + TURBK2U * FILNU
+      TURBU  = INTVC (TURBUD, TURBU0)
+!**********************************************************************!
+!     V - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.2
+!
+     TURBXVDD = - TURBK1VW * TURBXVD - TURBK2VW * TURBXV      &
+                + TURBK4VW * FILNV
+     TURBXVD  = INTVC (TURBXVDD, TURBXVD0)
+     TURBXVDI = TURBXVD
+     TURBXV   = INTVC (TURBXVDI, TURBXV0)
+     TURBV    = TURBXV + TURBK3VW * TURBXVDI
+     TURBVD   = TURBXVDI + TURBK3VW * TURBXVDD
+!**********************************************************************!
+!     W - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.2
+!
+     TURBXWDD = - TURBK1VW * TURBXWD - TURBK2VW * TURBXW     &
+                + TURBK4VW * FILNW
+
+--- report page 17 (pdf page 21) ---
+     TURBXWD  = INTVC (TURBXWDD, TURBXWD0)
+     TURBXWDI = TURBXWD
+     TURBXW   = INTVC (TURBXWDI, TURBXW0)
+     TURBW    = TURBXW + TURBK3VW * TURBXWDI
+     TURBWD   = TURBXWDI + TURBK3VW * TURBXWDD
+!**********************************************************************!
+!     ALPHA , BETA COMPONENTS  ADDED      4-28-97, 5-6-97
+!**********************************************************************!
+!
+    TURBALP  = TURBW/VTOT   !     ALPHA COMPONENT
+    TURBBET  = TURBV/VTOT   !     BETA COMPONENT
+    TURBALPD = TURBWD/VTOT  !     ALPHA COMPONENT
+    TURBBETD = TURBVD/VTOT  !     BETA COMPONENT
+!**********************************************************************!
+!     P, Q, R COMPONENTS  ADDED           5-15-95 JCY
+!**********************************************************************!
+!     P - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.7
+!
+      TURBPD = - WP * TURBP + K2P * FILNP
+      TURBP  = INTVC (TURBPD, TURBP0)
+!**********************************************************************!
+!     Q - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.12
+!
+      TURBQD = - TURBQ / TAUQ + TURBWD / (TAUQ * VTOT)
+      TURBQ  = INTVC (TURBQD, TURBQ0)
+!**********************************************************************!
+!     R - COMPONENT
+!**********************************************************************!
+!
+!    used in eq.15
+!
+      TURBRD = - TURBR / TAUR + TURBVD / (TAUR * VTOT)
+      TURBR  = INTVC (TURBRD, TURBR0)
+!**********************************************************************!
+!
+END   !OF DERIVATIVE!
+!
+!**********************************************************************!
+!
+!**********************************************************************!
+!
+!    DISCRETE  BLOCK
+!
+!**********************************************************************!
+!
+   DISCRETE GUST
+!**********************************************************************!
+!
+
+--- report page 18 (pdf page 22) ---
+         INTERVAL TSGAUS = 0.0125
+!**********************************************************************!
+!     GAUSSIAN RANDOM PROCESS
+!
+!**********************************************************************!
+        IF(SDNOIS.LE.EPSLON) GOTO LETA1
+          FILNU = GAUSS(0.,SDNOIS)
+          FILNV = GAUSS(0.,SDNOIS)
+          FILNW = GAUSS(0.,SDNOIS)
+          FILNP = GAUSS(0.,SDNOIS)
+          GOTO LETA2
+        LETA1..CONTINUE
+          FILNU = 0.
+          FILNV = 0.
+          FILNW = 0.
+          FILNP = 0.
+        LETA2..CONTINUE
+!
+!**********************************************************************!
+!     TURBULENCE VIA BILINEAR TRANSFORM, OR TUSTIN TRANSFORM
+!
+!**********************************************************************!
+!     U-COMPONENT
+!**********************************************************************!
+        UFILK = FILNU
+        IF (T .EQ. 0.)   THEN
+          UFILKM1 = 0.
+          GUFILKM1 = 0.
+          FILUDKM1 = 0.
+          FILUD2KM1 = 0.
+        ENDIF
+!
+!     eq.18
+!
+        GUFILK = -FILK1*GUFILKM1 + TWOPIOVTNU*FILK2*(UFILK + UFILKM1)
+
+!**********************************************************************!
+! DIGITAL IMPLEMENTATION OF DERIVATIVE CALCULATIONS OF U-COMPONENT
+!**********************************************************************!
+!
+!     eq.27
+!
+          FILUD = (GUFILK - GUFILKM1)/TSAMP
+!
+!     eq.28
+!
+          FILUD2 = - KWD1 * filud2km1                     &
+                   + (kfild1*CFIL/(1. + tau*CFIL))        &
+                   *(ufilk - ufilkm1)                              5-9-97
+        FILUDKM1 = FILUD
+        FILUD2KM1 = FILUD2
+        UFILKM1 = UFILK
+        GUFILKM1 = GUFILK
+       FILU = GUFILK
+
+--- report page 19 (pdf page 23) ---
+!**********************************************************************!
+!     V-COMPONENT
+!**********************************************************************!
+        VFILK = FILNV
+        IF (T .EQ. 0.)   THEN
+          VFILKM1 = 0.
+          VFILKM2 = 0.
+          GVFILKM1 = 0.
+          GVFILKM2 = 0.
+          FILVDKM1 = 0.
+          FILVD2KM1 = 0.
+          FILVD2KM2 = 0.
+        ENDIF
+          FILVKM1 = GVFILKM1
+!
+!     eq.20
+!
+         GVFILK = - FILK4*GVFILKM1 - FILK5*GVFILKM2                 &
+                  + TWOPIOVTNU*FILK9*(FILK6*VFILK + FILK7*VFILKM1   &
+                  + FILK8*VFILKM2)
+!**********************************************************************!
+! DIGITAL IMPLEMENTATION OF DERIVATIVE CALCULATIONS OF V-COMPONENT
+!**********************************************************************!
+!
+!     eq.27
+!
+        FILVD = (GVFILK - GVFILKM1)/TSAMP
+!
+!     eq.29
+!
+        FILVD2 =  -2.*KWD1*FILVD2KM1                      &
+                  - KWD1**2*FILVD2KM2                     &
+                  + kwd2*((1.+CTWSR3)*VFILK               &
+                  - (2.*CTWSR3)*VFILKM1 -(1.-CTWSR3)*VFILKM2)   ! 5-12-97
+!
+          GVFILKM2 = GVFILKM1
+          GVFILKM1 = GVFILK
+          VFILKM2 = VFILKM1
+          VFILKM1 = VFILK
+          FILVD2KM2 = FILVD2KM1
+          FILVD2KM1 = FILVD2
+        FILVDKM1 = FILVD
+        FILV = GVFILK
+!**********************************************************************!
+!     W-COMPONENT
+!**********************************************************************!
+        WFILK = FILNW
+        IF (T .EQ. 0.)   THEN
+          WFILKM1 = 0.
+          WFILKM2 = 0.
+          GWFILKM1 = 0.
+          GWFILKM2 = 0.
+          FILWDKM1 = 0.
+          FILWD2KM1 = 0.
+
+--- report page 20 (pdf page 24) ---
+          FILWD2KM2 = 0.
+        ENDIF
+          FILWKM1 = GWFILKM1
+!
+!     eq.20
+!
+         GWFILK = - FILK4*GWFILKM1 - FILK5*GWFILKM2                 &
+                  + TWOPIOVTNU*FILK9*(FILK6*WFILK + FILK7*WFILKM1   &
+                  + FILK8*WFILKM2)
+!**********************************************************************!
+! DIGITAL IMPLEMENTATION OF DERIVATIVE CALCULATIONS OF W-COMPONENT
+!**********************************************************************!
+!
+!     eq.27
+!
+        FILWD = (GWFILK - GWFILKM1)/TSAMP
+
+!
+!     eq.29
+!
+        FILWD2 =  -2.*KWD1*FILWD2KM1                      &
+                  - KWD1**2*FILWD2KM2                     &
+                  + kwd2*((1.+CTWSR3)*WFILK               &
+                  - (2.*CTWSR3)*WFILKM1 -(1.-CTWSR3)*WFILKM2)  !5-12-97
+!
+          GWFILKM2 = GWFILKM1
+          GWFILKM1 = GWFILK
+          WFILKM2 = WFILKM1
+          WFILKM1 = WFILK
+          FILWD2KM2 = FILWD2KM1
+          FILWD2KM1 = FILWD2
+        FILWDKM1 = FILWD
+        FILW = GWFILK
+!**********************************************************************!
+!   P, Q, R COMPONENT ADDED   5-15-95 JCY
+!**********************************************************************!
+!     P-COMPONENT
+!**********************************************************************!
+        PFILK = FILNP
+        IF (T .EQ. 0.)   THEN
+          PFILKM1 = 0.
+          GPFILKM1 = 0.
+        ENDIF
+          GPFILK  = -PK1*GPFILKM1 + PK2*(PFILK + PFILKM1)    ! eq. 21
+          PFILKM1 = PFILK                                    ! 5-2-97
+          GPFILKM1 = GPFILK                                  ! 5-2-97
+        FILP = GPFILK
+!**********************************************************************!
+!     Q-COMPONENT
+!**********************************************************************!
+        IF (T .EQ. 0.)   THEN
+          FILQKM1 = 0.
+        ENDIF
+          FILQ    = -QK1*FILQKM1 + QK2*(FILW - FILWKM1)      ! eq. 23
+
+--- report page 21 (pdf page 25) ---
+                FILQKM1 = FILQ
+!
+!*******************************************************************************!
+!     R-COMPONENT
+!*******************************************************************************!
+        IF (T .EQ. 0.)   THEN
+           FILRKM1 = 0.
+        ENDIF
+           FILR    = -RK1*FILRKM1 + RK2*(FILV - FILVKM1)      ! eq. 25
+           FILRKM1 = FILR
+!
+!*******************************************************************************!
+!    ALPHA , BETA COMPONENTS  ADDED       5-7-97
+!*******************************************************************************!
+!
+        FILA  = FILW/VTOT    !     ALPHA COMPONENT
+        FILB  = FILV/VTOT    !     BETA COMPONENT
+
+        FILAD = FILWD/VTOT
+        FILBD = FILVD/VTOT
+!
+!*******************************************************************************!
+!     ALPHA , BETA COMPONENTS ALTERNATES ADDED       6-19-97
+!*******************************************************************************!
+        FILAD2 = FILWD2/VTOT
+        FILBD2 = FILVD2/VTOT
+!
+!*******************************************************************************!
+! MIL STD IMPLEMENTATION OF CALCS OF u,v,w,p,q,r-COMPONENT
+!                                                                       8-28-97
+!*******************************************************************************!
+        IF (T .EQ. 0.)   THEN
+           MILUKM1 = 0.
+           MILVKM1 = 0.
+           MILWKM1 = 0.
+           MILPKM1 = 0.
+           MILQKM1 = 0.
+           MILRKM1 = 0.
+        ENDIF
+      MILUK = milk1*MILUKM1 + sigu*milk3*ufilk                    ! eq.30
+      MILVK = milk2*MILVKM1 + sigv*milk4*vfilk                    ! eq.31
+      MILWK = milk2*MILWKM1 + sigw*milk4*wfilk                    ! eq.32
+      MILPK = milk5*MILPKM1 + sigp*milk6*pfilk                    ! eq.33
+      MILQK = milk7*MILQKM1 + piov4b*(milwk-milwkm1)              ! eq.34
+      MILRK = milk8*MILRKM1 + piov3b*(milvk-milvkm1)              ! eq.35
+!
+!   Calc derivatives                                              9-18-97
+!
+      MILUDK = (MILUK - MILUKM1)/TSAMP
+      MILVDK = (MILVK - MILVKM1)/TSAMP
+      MILWDK = (MILWK - MILWKM1)/TSAMP
+!
+!   save past values
+!
+
+--- report page 22 (pdf page 26) ---
+            MILUKM1 = MILUK
+            MILVKM1 = MILVK
+            MILWKM1 = MILWK
+            MILPKM1 = MILPK
+            MILQKM1 = MILQK
+            MILRKM1 = MILRK
+!
+!*******************************************************************************!
+!
+   END ! GUST DISCRETE
+!
+!*******************************************************************************!
+!
+   DISCRETE DISCRMS
+!
+!*******************************************************************************!
+!     DISCRETE TO COMPUTE RMS OF TURBULENCE
+!
+        INTERVAL TRMS = 0.0125
+        SAMPS = SAMPS + 1.
+!
+        DRMS(DRMSTURBU, DMNTURBU, TURBU , SAMPS)
+        DRMS(DRMSTURBV, DMNTURBV, TURBV , SAMPS)
+        DRMS(DRMSTURBW, DMNTURBW, TURBW , SAMPS)
+!
+        DRMS(DRMSFILNU, DMNFILNU, FILNU, SAMPS)
+        DRMS(DRMSFILNV, DMNFILNV, FILNV, SAMPS)
+        DRMS(DRMSFILNW, DMNFILNW, FILNW, SAMPS)
+!
+        DRMS(DRMSFILNP, DMNFILNP, FILNP, SAMPS)
+!
+        DRMS(DRMSFILU, DMNFILU, FILU, SAMPS)
+        DRMS(DRMSFILV, DMNFILV, FILV, SAMPS)
+        DRMS(DRMSFILW, DMNFILW, FILW, SAMPS)
+!
+        DRMS(DRMSTURBUD, DMNTURBUD, TURBUD , SAMPS)
+        DRMS(DRMSTURBVD, DMNTURBVD, TURBVD , SAMPS)
+        DRMS(DRMSTURBWD, DMNTURBWD, TURBWD , SAMPS)
+!
+!
+        DRMS(DRMSTURBP, DMNTURBP, TURBP, SAMPS)
+        DRMS(DRMSTURBQ, DMNTURBQ, TURBQ, SAMPS)
+        DRMS(DRMSTURBR, DMNTURBR, TURBR, SAMPS)
+!
+        DRMS(DRMSFILUD, DMNFILUD, FILUD, SAMPS)
+        DRMS(DRMSFILVD, DMNFILVD, FILVD, SAMPS)
+        DRMS(DRMSFILWD, DMNFILWD, FILWD, SAMPS)
+!
+        DRMS(DRMSFILP, DMNFILP, FILP, SAMPS)
+        DRMS(DRMSFILQ, DMNFILQ, FILQ, SAMPS)
+        DRMS(DRMSFILR, DMNFILR, FILR, SAMPS)
+!
+!    FOLLOWING ADDED 5-8-97
+!
+
+--- report page 23 (pdf page 27) ---
+        DRMS(DRMSTURALP , DMNTURBALP, TURBALP, SAMPS)
+        DRMS(DRMSTURBBET, DMNTURBBET, TURBBET, SAMPS)
+!
+        DRMS(DRMSTURALPD , DMNTURBALPD, TURBALPD, SAMPS)
+        DRMS(DRMSTURBBETD, DMNTURBBETD, TURBBETD, SAMPS)
+!
+        DRMS(DRMSFILA , DMNFILA , FILA , SAMPS)
+        DRMS(DRMSFILB , DMNFILB , FILB , SAMPS)
+        DRMS(DRMSFILAD, DMNFILAD, FILAD, SAMPS)
+        DRMS(DRMSFILBD, DMNFILBD, FILBD, SAMPS)
+!
+!      FILAD2, FILBD2    ADDED 6-29-97
+!
+        DRMS(DRMSFILAD2, DMNFILAD2, FILAD2, SAMPS)
+        DRMS(DRMSFILBD2, DMNFILBD2, FILBD2, SAMPS)
+!
+        DRMS(DRMSTURBQ2, DMNTURBQ2, TURBQ2, SAMPS)
+        DRMS(DRMSTURBR2, DMNTURBR2, TURBR2, SAMPS)
+!
+!
+        DRMS(DRMSFILUD2, DMNFILUD2, FILUD2, SAMPS)
+        DRMS(DRMSFILVD2, DMNFILVD2, FILVD2, SAMPS)
+        DRMS(DRMSFILWD2, DMNFILWD2, FILWD2, SAMPS)
+!
+        XCORR(XCORTW, MXMTW, TURBW, TURBW, SAMPS, 1)
+        XCORR(XCORFW, MXMFW,  FILW,  FILW, SAMPS, 1)
+!
+        XCORR(XCORTV, MXMTV, TURBV, TURBV, SAMPS, 1)
+        XCORR(XCORFV, MXMFV,  FILV,  FILV, SAMPS, 1)
+!
+        XCORR(XCORTQW, MXMTQW, TURBQ, TURBW, SAMPS, 0)
+        XCORR(XCORFQW, MXMFQW,  FILQ,  FILW, SAMPS, 0)
+!
+        XCORR(XCORTRV, MXMTRV, TURBR, TURBV, SAMPS, 0)
+        XCORR(XCORFRV, MXMFRV,  FILR,  FILV, SAMPS, 0)
+!
+!      MIL STD calcs, u,v,w,p,q,r    ADDED 8-28-97
+!
+        DRMS(DRMSMILUK, DMNMILUK, MILUK, SAMPS)
+        DRMS(DRMSMILVK, DMNMILVK, MILVK, SAMPS)
+        DRMS(DRMSMILWK, DMNMILWK, MILWK, SAMPS)
+        DRMS(DRMSMILPK, DMNMILPK, MILPK, SAMPS)
+        DRMS(DRMSMILQK, DMNMILQK, MILQK, SAMPS)
+        DRMS(DRMSMILRK, DMNMILRK, MILRK, SAMPS)
+!
+        DRMS(DRMSMILUDK, DMNMILUDK, MILUDK, SAMPS)
+        DRMS(DRMSMILVDK, DMNMILVDK, MILVDK, SAMPS)
+        DRMS(DRMSMILWDK, DMNMILWDK, MILWDK, SAMPS)
+!
+   END ! of DISCRMS DISCRETE
+!*******************************************************************************!
+!------------------------------------------------------------------------------!
+! ------ DISCRETE TO SAVE DATA TO AN ARRAY IN DRYDEN GETDATA FORMAT     !
+!------------------------------------------------------------------------------!
+
+--- report page 24 (pdf page 28) ---
+!*******************************************************************************!
+!
+DISCRETE ASC
+        INTERVAL TSASC = 0.0125
+!
+      CALL ASCFM(T,                                              &
+        TURBU,     TURBV,     TURBW,     FILU,                   &
+        FILV,      FILW,      TURBUD,    TURBVD,                 &
+        TURBWD,    FILUD,     FILVD,     FILWD,                  &
+        FILNU,     FILNV,     FILNW,     FILNP,                  &
+        TURBP,     TURBQ,     TURBR,                             &
+        FILP,      FILQ,      FILR,      TURBALP,                &
+        TURBBET,   TURBALPD,  TURBBETD,  FILA,                   &
+        FILB,      FILAD,     FILBD,     TURBQ2,                 &
+        TURBR2,    FILUD2,    FILVD2,    FILWD2,                 &
+        FILAD2,    FILBD2,    MILUK,     MILVK,                  &
+        MILWK,     MILPK,     MILQK,     MILRK,                  &
+        MILUDK,    MILVDK,    MILWDK,                            &
+        NUMOUT,    TSTP)
+!
+     TERMT(T.GE.TSTP)
+
+END !--------- ASC DISCRETE
+
+END   !OF DYNAMIC!
+!
+TERMINAL
+!
+       CALL WSTATS (T,                                           &
+                DRMSTURBU,DRMSTURBV,DRMSTURBW,                   &
+                DRMSTURBP,DRMSTURBQ,DRMSTURBR,                   &
+                DRMSTURBQ2,DRMSTURBR2,                           &
+                DRMSFILU,DRMSFILV,DRMSFILW,                      &
+                DRMSFILP,DRMSFILQ,DRMSFILR,                      &
+                DRMSFILNU,DRMSFILNV,DRMSFILNW,DRMSFILNP,         &
+                DRMSTURBUD,DRMSTURBVD,DRMSTURBWD,                &
+                DRMSFILUD,DRMSFILVD,DRMSFILWD,                   &
+                DRMSFILUD2,DRMSFILVD2,DRMSFILWD2,                &
+                DRMSTURALP,DRMSTURBBET,                          &
+                DRMSTURALPD,DRMSTURBBETD,                        &
+                DRMSFILA,DRMSFILB,DRMSFILAD,DRMSFILBD,           &
+                DRMSFILAD2,DRMSFILBD2,                           &
+                DMNTURBU,DMNTURBV,DMNTURBW,                      &
+                DMNTURBP,DMNTURBQ,DMNTURBR,                      &
+                DMNTURBQ2,DMNTURBR2,                             &
+                DMNFILU,DMNFILV,DMNFILW,                         &
+                DMNFILP,DMNFILQ,DMNFILR,                         &
+                DMNFILNU,DMNFILNV,DMNFILNW,DMNFILNP,             &
+                DMNTURBUD,DMNTURBVD,DMNTURBWD,                   &
+                DMNFILUD,DMNFILVD,DMNFILWD,                      &
+                DMNFILUD2,DMNFILVD2,DMNFILWD2,                   &
+                DMNTURBALP,DMNTURBBET,                           &
+                DMNTURBALPD,DMNTURBBETD,                         &
+                DMNFILA,DMNFILB,DMNFILAD,DMNFILBD,               &
+
+--- report page 25 (pdf page 29) ---
+                DMNFILAD2,DMNFILBD2,                             &
+                DRMSMILUK,DMNMILUK,DRMSMILVK,DMNMILVK,           &
+                DRMSMILWK,DMNMILWK,DRMSMILPK,DMNMILPK,           &
+                DRMSMILQK,DMNMILQK,DRMSMILRK,DMNMILRK,           &
+                DRMSMILUDK,DMNMILUDK,DRMSMILVDK,DMNMILVDK,       &
+                DRMSMILWDK,DMNMILWDK)
+!
+END ! END OF TERMINAL
+!
+!
+END   !OF PROGRAM!
+      SUBROUTINE WSTATS (T,
+c
+c *******   35  +2 = 37 rms    ********************************
+c
+      *    DRMSTURBU,      DRMSTURBV,      DRMSTURBW,
+      *    DRMSTURBP,      DRMSTURBQ,      DRMSTURBR,
+      *    DRMSTURBQ2,     DRMSTURBR2,
+      *    DRMSFILU,       DRMSFILV,       DRMSFILW,
+      *    DRMSFILP,       DRMSFILQ,       DRMSFILR,
+      *    DRMSFILNU,      DRMSFILNV,      DRMSFILNW,      DRMSFILNP,
+      *    DRMSTURBUD,     DRMSTURBVD,     DRMSTURBWD,
+      *    DRMSFILUD,      DRMSFILVD,      DRMSFILWD,
+      *    DRMSFILUD2,     DRMSFILVD2,     DRMSFILWD2,
+      *    DRMSTURALP,     DRMSTURBBET,
+      *    DRMSTURALPD,    DRMSTURBBETD,
+      *    DRMSFILA,       DRMSFILB,       DRMSFILAD,      DRMSFILBD,
+      *    DRMSFILAD2,     DRMSFILBD2,
+c
+c *******   35 + 2 = 37 means + 12 mils= 49 values
+*******************************
+c
+      *    DMNTURBU,       DMNTURBV,       DMNTURBW,
+      *    DMNTURBP,       DMNTURBQ,       DMNTURBR,
+      *    DMNTURBQ2,      DMNTURBR2,
+      *    DMNFILU,        DMNFILV,        DMNFILW,
+      *    DMNFILP,        DMNFILQ,        DMNFILR,
+      *    DMNFILNU,       DMNFILNV,       DMNFILNW,       DMNFILNP,
+      *    DMNTURBUD,      DMNTURBVD,      DMNTURBWD,
+      *    DMNFILUD,       DMNFILVD,       DMNFILWD,
+      *    DMNFILUD2,      DMNFILVD2,      DMNFILWD2,
+      *    DMNTURBALP,     DMNTURBBET,
+      *    DMNTURBALPD,    DMNTURBBETD,
+      *    DMNFILA,        DMNFILB,        DMNFILAD,       DMNFILBD,
+      *    DMNFILAD2,      DMNFILBD2,
+      *    DRMSMILUK,      DMNMILUK,       DRMSMILVK,      DMNMILVK,
+      *    DRMSMILWK,      DMNMILWK,       DRMSMILPK,      DMNMILPK,
+      *    DRMSMILQK,      DMNMILQK,       DRMSMILRK,      DMNMILRK,
+      *    DRMSMILUDK,     DMNMILUDK,      DRMSMILVDK,     DMNMILVDK,
+      *    DRMSMILWDK,     DMNMILWDK)
+C
+C*****************************************************************************
+C*   SUBROUTINE WSTAT
+
+--- report page 26 (pdf page 30) ---
+C*   WRITES AN OUTPUT FILE IN THE GETDATA FORMAT ASC. to IMPORT TO EXCEL
+or KG
+C*****************************************************************************
+c
+      DIMENSION XLAB2(93)
+      CHARACTER*16 XLAB1, XLAB2
+C
+      DATA XLAB1 /'names'/
+      DATA NSIMCH2 / 93 /
+C*****************************************************************************
+c
+Cjcy       INCLUDE 'dpguststats.inc'
+c
+C*****************************************************************************
+C
+      DATA XLAB2/  'names',
+C
+c *******   35 rms    ******************************
+c
+      *    'DRMSTURBU',   'DRMSTURBV',   'DRMSTURBW',
+      *    'DRMSTURBP',   'DRMSTURBQ',   'DRMSTURBR',
+      *    'DRMSTURBQ2',  'DRMSTURBR2',
+      *    'DRMSFILU',    'DRMSFILV',    'DRMSFILW',
+      *    'DRMSFILP',    'DRMSFILQ',    'DRMSFILR',
+      *    'DRMSFILNU',   'DRMSFILNV',   'DRMSFILNW',    'DRMSFILNP',
+      *    'DRMSTURBUD',  'DRMSTURBVD',  'DRMSTURBWD',
+      *    'DRMSFILUD',   'DRMSFILVD',   'DRMSFILWD',
+      *    'DRMSFILUD2',  'DRMSFILVD2',  'DRMSFILWD2',
+      *    'DRMSTURALP',  'DRMSTURBBET',
+      *    'DRMSTURALPD','DRMSTURBBETD',
+      *    'DRMSFILA',    'DRMSFILB',    'DRMSFILAD',    'DRMSFILBD',
+c
+c *******   37 means + 2 rms +12 mil ******************************
+c
+      *    'DMNTURBU',    'DMNTURBV',    'DMNTURBW',
+      *    'DMNTURBP',    'DMNTURBQ',    'DMNTURBR',
+      *    'DMNTURBQ2',   'DMNTURBR2',
+      *    'DMNFILU',     'DMNFILV',     'DMNFILW',
+      *    'DMNFILP',     'DMNFILQ',     'DMNFILR',
+      *    'DMNFILNU',    'DMNFILNV',    'DMNFILNW',     'DMNFILNP',
+      *    'DMNTURBUD',   'DMNTURBVD',   'DMNTURBWD',
+      *    'DMNFILUD',    'DMNFILVD',    'DMNFILWD',
+      *    'DMNFILUD2',   'DMNFILVD2',   'DMNFILWD2',
+      *    'DMNTURBALP',  'DMNTURBBET',
+      *    'DMNTURBALPD','DMNTURBBETD',
+      *    'DMNFILA',     'DMNFILB',     'DMNFILAD',     'DMNFILBD',
+      *    'DRMSFILAD2',  'DRMSFILBD2',  'DMNFILAD2',    'DMNFILBD2',
+      *    'DRMSMILUK',   'DMNMILUK',    'DRMSMILVK',
+      *    'DMNMILVK',    'DRMSMILWK',   'DMNMILWK',
+      *    'DRMSMILPK',   'DMNMILPK',    'DRMSMILQK',
+      *    'DMNMILQK',    'DRMSMILRK',   'DMNMILRK',
+      *    'DRMSMILUDK',  'DMNMILUDK',   'DRMSMILVDK',
+      *    'DMNMILVDK',   'DRMSMILWDK',  'DMNMILWDK' /
+C
+
+--- report page 27 (pdf page 31) ---
+C  OPEN A DATA CHANNEL FOR WRITING THE GETDATA ASC FORMAT FILE.
+C
+      OPEN (33,FILE='KGACSL.ASC',STATUS='UNKNOWN')
+C
+C  WRITE OUT DATA IN TO FILE FOR USE IN GETDATA.
+C
+      WRITE(33,'(''format  asc 2   .1'',/,''nChans'',t14,i3)')NSIMCH2-1
+      WRITE(33,'(6a13)') XLAB1,(XLAB2(I),I=2,NSIMCH2)
+      WRITE(33,'(''data001'')')
+C
+      WRITE(33,'(6G13.7)') T,
+     *    DRMSTURBU,      DRMSTURBV,      DRMSTURBW,
+     *    DRMSTURBP,      DRMSTURBQ,      DRMSTURBR,
+     *    DRMSTURBQ2,     DRMSTURBR2,
+     *    DRMSFILU,       DRMSFILV,       DRMSFILW,
+     *    DRMSFILP,       DRMSFILQ,       DRMSFILR,
+     *    DRMSFILNU,      DRMSFILNV,      DRMSFILNW,      DRMSFILNP,
+     *    DRMSTURBUD,     DRMSTURBVD,     DRMSTURBWD,
+     *    DRMSFILUD,      DRMSFILVD,      DRMSFILWD,
+     *    DRMSFILUD2,     DRMSFILVD2,     DRMSFILWD2,
+     *    DRMSTURALP,     DRMSTURBBET,
+     *    DRMSTURALPD,    DRMSTURBBETD,
+     *    DRMSFILA,       DRMSFILB,       DRMSFILAD,      DRMSFILBD,
+c *******   37 means + 2  rms + 12 mils *******************************
+     *    DMNTURBU,       DMNTURBV,       DMNTURBW,
+     *    DMNTURBP,       DMNTURBQ,       DMNTURBR,
+     *    DMNTURBQ2,      DMNTURBR2,
+     *    DMNFILU,        DMNFILV,        DMNFILW,
+     *    DMNFILP,        DMNFILQ,        DMNFILR,
+     *    DMNFILNU,       DMNFILNV,       DMNFILNW,       DMNFILNP,
+     *    DMNTURBUD,      DMNTURBVD,      DMNTURBWD,
+     *    DMNFILUD,       DMNFILVD,       DMNFILWD,
+     *    DMNFILUD2,      DMNFILVD2,      DMNFILWD2,
+     *    DMNTURBALP,     DMNTURBBET,
+     *    DMNTURBALPD,    DMNTURBBETD,
+     *    DMNFILA,        DMNFILB,        DMNFILAD,       DMNFILBD,
+     *    DRMSFILAD2,     DRMSFILBD2,     DMNFILAD2,      DMNFILBD2,
+     *    DRMSMILUK,      DMNMILUK,       DRMSMILVK,      DMNMILVK,
+     *    DRMSMILWK,      DMNMILWK,       DRMSMILPK,      DMNMILPK,
+     *    DRMSMILQK,      DMNMILQK,       DRMSMILRK,      DMNMILRK,
+     *    DRMSMILUDK,     DMNMILUDK,      DRMSMILVDK,     DMNMILVDK,
+     *    DRMSMILWDK,     DMNMILWDK
+c
+     CLOSE(33)
+c
+      RETURN
+      END
+      SUBROUTINE ASCFM(T,
+     *   TURBU,     TURBV,     TURBW,     FILU,
+     *   FILV,      FILW,      TURBUD,    TURBVD,
+     *   TURBWD,    FILUD,     FILVD,     FILWD,
+     *   FILNU,     FILNV,     FILNW,     FILNP,
+     *   TURBP,     TURBQ,     TURBR,
+     *   FILP,      FILQ,      FILR,      TURBALP,
+
+--- report page 28 (pdf page 32) ---
+     *   TURBBET,   TURBALPD,  TURBBETD,  FILA,
+     *   FILB,      FILAD,     FILBD,     TURBQ2,
+     *   TURBR2,    FILUD2,    FILVD2,    FILWD2,
+     *   FILAD2,    FILBD2,    MILUK,     MILVK,
+     *   MILWK,     MILPK,     MILQK,     MILRK,
+     *   MILUDK,    MILVDK,    MILWDK,
+     *   NUMOUT,    TSTP)
+
+C
+C*****************************************************************************
+C*   SUBROUTINE ASCFM
+C*   WRITES AN OUTPUT FILE IN THE GETDATA FORMAT ASC.
+C*****************************************************************************
+C
+cjcy    IMPLICIT REAL*8 (a-h,o-z)
+c
+      DIMENSION XLABEL2(47)
+      CHARACTER*16 XLABEL1, XLABEL2
+C
+cjcy was real*8
+C
+      REAL MILUK, MILVK, MILWK, MILPK, MILQK, MILRK,
+     *        MILUDK, MILVDK, MILWDK
+C
+      DATA XLABEL1 /'names'/
+      DATA NSIMCH2 / 47/
+c
+      DATA XLABEL2/'names',
+     *    'TURBU',      'TURBV',      'TURBW',      'FILU',
+     *    'FILV',       'FILW',       'TURBUD',     'TURBVD',
+     *    'TURBWD',     'FILUD',      'FILVD',      'FILWD',
+     *    'FILNU',      'FILNV',      'FILNW',      'FILNP',
+     *    'TURBP',      'TURBQ',      'TURBR',
+     *    'FILP',       'FILQ',       'FILR',       'TURBALP',
+     *    'TURBBET',    'TURBALPD',   'TURBBETD',   'FILA',
+     *    'FILB',       'FILAD',      'FILBD',      'TURBQ2',
+     *    'TURBR2',     'FILUD2',     'FILVD2',     'FILWD2',
+     *    'FILAD2',     'FILBD2',     'MILUK',      'MILVK',
+     *    'MILWK',      'MILPK',      'MILQK',      'MILRK',
+     *    'MILUDK',     'MILVDK',     'MILWDK' /
+
+C
+C  OPEN A DATA CHANNEL FOR WRITING THE GETDATA ASC FORMAT FILE.
+C
+      IF((T .EQ. 0.0) ) THEN
+       OPEN (3,FILE='ACSL.ASC',STATUS='UNKNOWN')
+C
+C  WRITE OUT DATA IN TO FILE FOR USE IN GETDATA.
+C
+       WRITE(3,'(''format  asc 2   .1'',/,''nChans'',t14,i3)')NSIMCH2-1
+       WRITE(3,'(6a13)') XLABEL1,(XLABEL2(I),I=2,NSIMCH2)
+       WRITE(3,'(''data001'')')
+       INTERVA = NUMOUT
+      ENDIF
+
+--- report page 29 (pdf page 33) ---
+C
+      IF(T .GE. 0.0 .AND. T .LT. TSTP)  THEN
+         IF (INTERVA .EQ. NUMOUT) THEN
+       WRITE(3,'(6G13.7)') T,
+     *   TURBU,     TURBV,     TURBW,     FILU,
+     *   FILV,      FILW,      TURBUD,    TURBVD,
+     *   TURBWD,    FILUD,     FILVD,     FILWD,
+     *   FILNU,     FILNV,     FILNW,     FILNP,
+     *   TURBP,     TURBQ,     TURBR,
+     *   FILP,      FILQ,      FILR,      TURBALP,
+     *   TURBBET,   TURBALPD,  TURBBETD,  FILA,
+     *   FILB,      FILAD,     FILBD,     TURBQ2,
+     *   TURBR2,    FILUD2,    FILVD2,    FILWD2,
+     *   FILAD2,    FILBD2,    MILUK,     MILVK,
+     *   MILWK,     MILPK,     MILQK,     MILRK,
+     *   MILUDK,    MILVDK,    MILWDK
+C
+          INTERVA = 1
+       ELSE
+          INTERVA = INTERVA + 1
+       ENDIF
+      ENDIF
+      IF(T .GT. TSTP) CLOSE(3)
+      RETURN
+      END
+
+--- report page 30 (pdf page 34) --- [prose, end of listing]
+Time History Plots
+
+     Numerous 100-second runs were made with the GUSTMDL test program to produce
+turbulence sequences for analysis of the continuous, Tustin, and MIL STD turbulence
+models. Simulated aircraft velocities of 100 ft/sec and 1000 ft/sec were used. Sample
+time history plots of the first 10 seconds of these sequences for each model are
+included in figures 1 through 3 for V = 100 ft/sec and in figures 4 through 6 for
+V = 1000 ft/sec.
+
+[Figures 1-6 are plots; not transcribed.]

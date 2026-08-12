@@ -25,6 +25,7 @@ expressions, and every backend runs the same golden + property suite.
 | `properties/` | pytest suite of physics invariants (accuracy): symbolic proofs, conservation, symmetry, dimensional scaling, Jacobian-vs-FD, and the golden authenticity tests. |
 | `golden/vectors/` | Frozen reference vectors from **three independent provenances**: RotorPy `research-additions` (full model, 12 files), Crazyflow's actual running code, SkyDreamer's actual running code — each with commit/sha provenance. |
 | `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
+| `golden/checkdata/` | Published check data from pinned documents (archaic-source exception): author-run reference statistics where the reference code is no longer executable. Currently NASA CR-1998-206937 (Dryden). |
 | `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
 | `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
 | `INTAKE.md` | The protocol for evaluating a new paper/repo against the registry. |
@@ -79,6 +80,10 @@ uv run --with scipy --with array-api-compat python golden/generate/gen_crazyflow
 
 # SkyDreamer (execs their literal dynamics source, njit stubbed):
 uv run python golden/generate/gen_skydreamer.py --out golden/vectors
+
+# NASA CR-1998-206937 Dryden check data (pinned document, not runnable code — a
+# self-checking transcription freezer; --pdf verifies the sha256 pin if you have the file):
+uv run python golden/generate/gen_dryden_cr206937.py
 ```
 
 ## Adding new physics
