@@ -12,7 +12,7 @@ import pathlib
 import numpy as np
 import pytest
 
-from spec.discretization import rk4_step
+from skyflow_dynamics.spec.discretization import rk4_step
 from properties.helpers import N, flat_params, statedot_fn
 
 VECTOR_DIR = pathlib.Path(__file__).resolve().parent.parent / "golden" / "vectors"

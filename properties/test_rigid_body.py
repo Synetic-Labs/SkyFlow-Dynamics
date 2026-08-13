@@ -3,9 +3,9 @@
 import numpy as np
 import sympy as sp
 
-from spec import quaternion as Q
-from spec.discretization import rk4_step
-from spec.frames import cross, hat
+from skyflow_dynamics.spec import quaternion as Q
+from skyflow_dynamics.spec.discretization import rk4_step
+from skyflow_dynamics.spec.frames import cross, hat
 from properties.helpers import (P, S, U, flat_params, hover_speed, make_inputs,
                                 params_dict, statedot_fn, unit_subs)
 
@@ -20,7 +20,7 @@ def test_hover_is_exact_equilibrium():
 
 def test_hover_speed_symbolic():
     # Solve Σᵢ ct2·Ω² = m·g for the symmetric quadratic vehicle out of the actual v̇_z expression.
-    from spec.dynamics import statedot
+    from skyflow_dynamics.spec.dynamics import statedot
     w_sym = sp.Symbol("Omega_h", positive=True)
     subs = {}
     for i in range(4):

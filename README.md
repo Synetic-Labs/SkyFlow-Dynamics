@@ -21,7 +21,7 @@ expressions, and every backend runs the same golden + property suite.
 
 | Path | Contents |
 |---|---|
-| `spec/` | The SymPy source of truth: one module per physics domain, plus `registry.py` — every term with tier, provenance, and tests. |
+| `skyflow_dynamics/spec/` | The SymPy source of truth: one module per physics domain, plus `registry.py` — every term with tier, provenance, and tests. |
 | `properties/` | pytest suite of physics invariants (accuracy): symbolic proofs, conservation, symmetry, dimensional scaling, Jacobian-vs-FD, and the golden authenticity tests. |
 | `golden/vectors/` | Frozen reference vectors from **three independent provenances**: RotorPy `research-additions` (full model, 12 files), Crazyflow's actual running code, SkyDreamer's actual running code — each with commit/sha provenance. |
 | `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
@@ -29,7 +29,7 @@ expressions, and every backend runs the same golden + property suite.
 | `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
 | `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
 | `INTAKE.md` | The protocol for evaluating a new paper/repo against the registry. |
-| `backends/` | Generated adapters — `backends/jax.py` (live): the spec emitted to JAX via `sympy.lambdify`, validated by the same golden + property suites (`properties/test_backend_jax.py`). |
+| `skyflow_dynamics/backends/` | Generated adapters — `skyflow_dynamics/backends/jax.py` (live): the spec emitted to JAX via `sympy.lambdify`, validated by the same golden + property suites (`properties/test_backend_jax.py`). |
 | `harness/` | *(later, TBD)* the discrete/stateful simulation layer (command delay lines, ZOH control rates, disturbance resampling, RNG) — deliberately **not** part of the math spec. |
 
 ## Canonical conventions
@@ -52,7 +52,7 @@ boundaries (golden generators, future backends).
 
 ## Term tiers
 
-Every term in `spec/registry.py` carries a tier:
+Every term in `skyflow_dynamics/spec/registry.py` carries a tier:
 
 - **`verified`** — implemented and cross-validated in a reference simulator; covered by golden
   vectors and property tests here.
@@ -68,20 +68,20 @@ uv run pytest
 
 ## JAX backend
 
-`backends/jax.py` is not handwritten physics: every dynamics function is code-generated from
-the SymPy spec on first use and pinned by the same golden vectors as the spec itself
-(`properties/test_backend_jax.py`). Install with the extra (`uv sync --extra jax`; the dev
-group already includes it), then:
+`skyflow_dynamics/backends/jax.py` is not handwritten physics: every dynamics function is
+code-generated from the SymPy spec on first use and pinned by the same golden vectors as the
+spec itself (`properties/test_backend_jax.py`). Install with the extra
+(`uv sync --extra jax`, or depend on `skyflow-dynamics[jax]`), then:
 
 ```python
 import jax, jax.numpy as jnp
-from backends import jax as skyflow
-from spec.parameters import CRAZYFLIE
+from skyflow_dynamics.backends import jax as sfd_jax
+from skyflow_dynamics.spec.parameters import CRAZYFLIE
 
-p    = skyflow.pack_params(CRAZYFLIE)          # golden-file param dict → flat vector
-f    = skyflow.statedot_fn()                   # ṡ = f(s, u, p)   (n=4, first-order motor)
-step = skyflow.rk4_step_fn()                   # s⁺ = step(s, u, p, dt), raw integrator
-roll = jax.jit(skyflow.make_rollout(step, 0.0, 2500.0))   # lax.scan trajectory
+p    = sfd_jax.pack_params(CRAZYFLIE)          # golden-file param dict → flat vector
+f    = sfd_jax.statedot_fn()                   # ṡ = f(s, u, p)   (n=4, first-order motor)
+step = sfd_jax.rk4_step_fn()                   # s⁺ = step(s, u, p, dt), raw integrator
+roll = jax.jit(sfd_jax.make_rollout(step, 0.0, 2500.0))   # lax.scan trajectory
 
 fleet_f = jax.jit(jax.vmap(f, in_axes=(0, None, None)))   # batched vehicles
 ```

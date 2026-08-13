@@ -4,7 +4,7 @@ with its own continuous form as dt → 0."""
 import numpy as np
 import sympy as sp
 
-from spec import simplified
+from skyflow_dynamics.spec import simplified
 from properties.helpers import random_unit_quaternion
 
 

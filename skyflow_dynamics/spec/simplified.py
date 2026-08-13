@@ -34,8 +34,8 @@ Differentiable Simulation", ICRA 2025 (rpg_flightning).
 
 import sympy as sp
 
-from spec import quaternion
-from spec.frames import gravity_world
+from skyflow_dynamics.spec import quaternion
+from skyflow_dynamics.spec.frames import gravity_world
 
 
 def step(x: sp.Matrix, v: sp.Matrix, q: sp.Matrix, c: sp.Expr, w_cmd: sp.Matrix,

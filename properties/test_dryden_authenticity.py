@@ -33,7 +33,7 @@ import pathlib
 import numpy as np
 import sympy as sp
 
-from spec import wind
+from skyflow_dynamics.spec import wind
 
 DATA = json.loads(
     (pathlib.Path(__file__).resolve().parent.parent / "golden" / "checkdata" /

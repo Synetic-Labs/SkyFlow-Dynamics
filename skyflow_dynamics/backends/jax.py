@@ -33,9 +33,9 @@ import jax
 import jax.numpy as jnp
 import sympy as sp
 
-from spec import dynamics, parameters
-from spec.discretization import rk4_step
-from spec.symbols import input_symbols, param_symbols, state_symbols
+from skyflow_dynamics.spec import dynamics, parameters
+from skyflow_dynamics.spec.discretization import rk4_step
+from skyflow_dynamics.spec.symbols import input_symbols, param_symbols, state_symbols
 
 
 def state_slices(n: int = 4) -> dict:

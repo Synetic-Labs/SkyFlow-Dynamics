@@ -11,7 +11,7 @@ import math
 
 import sympy as sp
 
-from spec.symbols import Params
+from skyflow_dynamics.spec.symbols import Params
 
 #: name → (units, description). Shapes: () scalar, (n,) per-rotor, (3,) vector, (n,3) per-rotor vector.
 SCHEMA = {

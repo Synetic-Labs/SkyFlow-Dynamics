@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from spec.registry import SOURCES, TERMS, EXCLUSIONS  # noqa: E402
+from skyflow_dynamics.spec.registry import SOURCES, TERMS, EXCLUSIONS  # noqa: E402
 
 DOMAIN_TITLES = {
     "rigid_body": "Rigid body",

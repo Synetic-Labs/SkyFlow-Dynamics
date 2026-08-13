@@ -11,8 +11,8 @@ State ordering (must match symbols.State.flat() and the golden files):
 
 import sympy as sp
 
-from spec import motor, quaternion, rigid_body, wrench
-from spec.symbols import Inputs, Params, State
+from skyflow_dynamics.spec import motor, quaternion, rigid_body, wrench
+from skyflow_dynamics.spec.symbols import Inputs, Params, State
 
 #: Selectable motor models for statedot().
 MOTOR_MODELS = ("first_order", "asymmetric")

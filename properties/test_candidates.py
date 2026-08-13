@@ -4,8 +4,8 @@ terms, identities against their defining equations, and identified-parameter san
 import numpy as np
 import sympy as sp
 
-from spec import atmosphere, ground_effect, inflow, motor_electrical, quaternion, rotor_aero, wind
-from spec.frames import EZ
+from skyflow_dynamics.spec import atmosphere, ground_effect, inflow, motor_electrical, quaternion, rotor_aero, wind
+from skyflow_dynamics.spec.frames import EZ
 
 z, R, d, b, V, v_i = sp.symbols("z R d b V v_i", positive=True)
 
@@ -106,7 +106,7 @@ def test_oblique_thrust_hover_limit():
 
 def test_dynamic_inflow_is_first_order_lag():
     nu, nu_eq, tau = sp.symbols("nu nu_eq tau", positive=True)
-    from spec.motor import exact_exp_step
+    from skyflow_dynamics.spec.motor import exact_exp_step
     rate = inflow.dynamic_inflow_lag(nu, nu_eq, tau)
     assert sp.simplify(rate - (nu_eq - nu) / tau) == 0
     # Exact-exp step applies verbatim (same ODE structure as the verified motor lag).

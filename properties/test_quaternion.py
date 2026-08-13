@@ -4,8 +4,8 @@ are polynomial (using the unit-norm substitution), numerically at machine precis
 import numpy as np
 import sympy as sp
 
-from spec import quaternion as Q
-from spec.frames import hat
+from skyflow_dynamics.spec import quaternion as Q
+from skyflow_dynamics.spec.frames import hat
 from properties.helpers import random_unit_quaternion, unit_subs
 
 

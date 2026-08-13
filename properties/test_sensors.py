@@ -4,8 +4,8 @@ symbolic guards for the F-1/F-2 frame-mixing defect class."""
 import numpy as np
 import sympy as sp
 
-from spec import quaternion as Q
-from spec import sensors
+from skyflow_dynamics.spec import quaternion as Q
+from skyflow_dynamics.spec import sensors
 
 
 def _sym(name, n=3):

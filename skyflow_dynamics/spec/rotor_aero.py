@@ -13,7 +13,7 @@ Verified sources: RotorPy paper §II-B (arXiv:2306.04485); Mahony, Kumar, Corke,
 
 import sympy as sp
 
-from spec.frames import EZ, cross
+from skyflow_dynamics.spec.frames import EZ, cross
 
 
 def local_airspeed(v_a: sp.Matrix, w: sp.Matrix, r_i: sp.Matrix) -> sp.Matrix:

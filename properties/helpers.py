@@ -8,9 +8,9 @@ from functools import lru_cache
 import numpy as np
 import sympy as sp
 
-from spec.dynamics import statedot
-from spec.parameters import CRAZYFLIE, substitution
-from spec.symbols import input_symbols, param_symbols, state_symbols
+from skyflow_dynamics.spec.dynamics import statedot
+from skyflow_dynamics.spec.parameters import CRAZYFLIE, substitution
+from skyflow_dynamics.spec.symbols import input_symbols, param_symbols, state_symbols
 
 N = 4
 S = state_symbols(N)

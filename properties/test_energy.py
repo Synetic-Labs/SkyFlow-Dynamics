@@ -5,8 +5,8 @@ NOT sign-definite in isolation; they are deliberately excluded.)"""
 import numpy as np
 import sympy as sp
 
-from spec import rotor_aero
-from spec.frames import EZ
+from skyflow_dynamics.spec import rotor_aero
+from skyflow_dynamics.spec.frames import EZ
 
 
 def test_parasitic_drag_power_nonpositive_symbolic():

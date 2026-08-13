@@ -449,7 +449,7 @@ def by_key(key: str) -> Term:
 
 def validate_registry() -> None:
     """Structural invariants checked by properties/test_registry.py."""
-    from spec.parameters import SCHEMA
+    from skyflow_dynamics.spec.parameters import SCHEMA
     keys = [t.key for t in TERMS]
     assert len(keys) == len(set(keys)), "duplicate term keys"
     domains = ("rigid_body", "actuator", "rotor_aero", "frame_aero", "sensor", "disturbance",

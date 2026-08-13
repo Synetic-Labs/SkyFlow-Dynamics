@@ -19,8 +19,8 @@ only the base thrust; the lift term adds after.
 
 import sympy as sp
 
-from spec.frames import EZ, cross
-from spec import rotor_aero
+from skyflow_dynamics.spec.frames import EZ, cross
+from skyflow_dynamics.spec import rotor_aero
 
 
 def body_wrench(w: sp.Matrix, W: sp.Matrix, v_a: sp.Matrix, p) -> tuple:

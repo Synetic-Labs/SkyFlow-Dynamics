@@ -12,8 +12,8 @@ I is the full 3×3 body inertia matrix (products of inertia supported).
 
 import sympy as sp
 
-from spec import quaternion
-from spec.frames import cross, gravity_world
+from skyflow_dynamics.spec import quaternion
+from skyflow_dynamics.spec.frames import cross, gravity_world
 
 
 def translational(v: sp.Matrix, q: sp.Matrix, F_B: sp.Matrix, F_ext: sp.Matrix,

@@ -13,7 +13,7 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp  # noqa: E402  (needs the x64 flag set first)
 
-from backends import jax as backend
+from skyflow_dynamics.backends import jax as backend
 from properties.helpers import (N, flat_params, hover_speed, make_inputs, params_dict,
                                 random_state, statedot_fn)
 from properties.test_golden import (BLOCKS, FILES, _check, _flat_inputs, _flat_state,

@@ -3,8 +3,8 @@
 import numpy as np
 import sympy as sp
 
-from spec import motor
-from spec.discretization import rk4_step
+from skyflow_dynamics.spec import motor
+from skyflow_dynamics.spec.discretization import rk4_step
 
 
 def test_asymmetric_reduces_to_first_order():

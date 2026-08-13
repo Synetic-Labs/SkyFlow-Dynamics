@@ -3,8 +3,8 @@ reference parameter sets valid against the schema."""
 
 import importlib
 
-from spec.parameters import CRAZYFLIE, SCHEMA, validate
-from spec.registry import EXCLUSIONS, SOURCES, TERMS, by_key, validate_registry
+from skyflow_dynamics.spec.parameters import CRAZYFLIE, SCHEMA, validate
+from skyflow_dynamics.spec.registry import EXCLUSIONS, SOURCES, TERMS, by_key, validate_registry
 
 
 def test_registry_validates():
@@ -16,8 +16,10 @@ def test_expression_paths_resolve():
         if term.expression.startswith("(harness"):
             continue
         for path in term.expression.split(", "):
+            # Registry paths stay in the spec's own namespace ("spec.motor.first_order_lag");
+            # they resolve inside the installed package.
             module_path, attr = path.rsplit(".", 1)
-            mod = importlib.import_module(module_path)
+            mod = importlib.import_module(f"skyflow_dynamics.{module_path}")
             assert hasattr(mod, attr), f"{term.key}: {path} does not resolve"
 
 

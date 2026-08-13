@@ -5,9 +5,9 @@ Sign conventions here guard against the exact failure modes found in reference s
 import numpy as np
 import sympy as sp
 
-from spec import wrench
-from spec.symbols import param_symbols, state_symbols
-from spec.parameters import substitution
+from skyflow_dynamics.spec import wrench
+from skyflow_dynamics.spec.symbols import param_symbols, state_symbols
+from skyflow_dynamics.spec.parameters import substitution
 from properties.helpers import flat_params, make_inputs, params_dict, statedot_fn
 
 P4 = param_symbols(4)
