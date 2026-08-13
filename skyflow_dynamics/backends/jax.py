@@ -33,7 +33,7 @@ import jax
 import jax.numpy as jnp
 import sympy as sp
 
-from skyflow_dynamics.spec import dynamics, parameters
+from skyflow_dynamics.spec import dynamics, motor, parameters, sensors
 from skyflow_dynamics.spec.discretization import rk4_step
 from skyflow_dynamics.spec.symbols import input_symbols, param_symbols, state_symbols
 
@@ -155,6 +155,75 @@ def post_step(s, rotor_speed_min, rotor_speed_max):
     q = q / jnp.linalg.norm(q, axis=-1, keepdims=True)
     W = jnp.clip(s[..., 13:], rotor_speed_min, rotor_speed_max)
     return jnp.concatenate([s[..., :6], q, s[..., 10:13], W], axis=-1)
+
+
+@lru_cache(maxsize=None)
+def param_slices(n: int = 4) -> dict:
+    """
+    SCHEMA name → index array into the flat parameter vector (pack_params order).
+    Multi-entry names map to all their positions (inertia → its 6 stored entries,
+    per-rotor names → n entries, vectors → 3). Intended for harness-side parameter
+    randomization masks and diagnostics — the layout is derived from the symbols,
+    never hardcoded.
+    """
+    import numpy as np
+    P = param_symbols(n)
+    pos = {s: i for i, s in enumerate(P.flat())}
+    out = {
+        "mass": [pos[P.mass]], "grav": [pos[P.grav]],
+        "inertia": [pos[P.inertia[a, b]] for a, b in
+                    ((0, 0), (1, 1), (2, 2), (0, 1), (0, 2), (1, 2))],
+        "rotor_pos": [pos[c] for r in P.rotor_pos for c in r],
+        "spin": [pos[s] for s in P.spin],
+        "axis": [pos[c] for e in P.axis for c in e],
+        "tau_m": [pos[P.tau_m]], "ka1": [pos[P.ka1]], "ka2": [pos[P.ka2]],
+        "kd1": [pos[P.kd1]], "kd2": [pos[P.kd2]], "I_rot": [pos[P.I_rot]],
+        "c_D": [pos[c] for c in P.c_D], "c_L": [pos[c] for c in P.c_L],
+        "k_d": [pos[P.k_d]], "k_z": [pos[P.k_z]], "k_flap": [pos[P.k_flap]],
+        "k_h": [pos[P.k_h]], "k_angle": [pos[P.k_angle]], "k_hor": [pos[P.k_hor]],
+        "k_v2": [pos[P.k_v2]], "r_prop": [pos[P.r_prop]],
+    }
+    for name in ("ct0", "ct1", "ct2", "cq0", "cq1", "cq2"):
+        out[name] = [pos[s] for s in getattr(P, name)]
+    return {k: np.asarray(v) for k, v in out.items()}
+
+
+@lru_cache(maxsize=None)
+def throttle_to_speed_fn():
+    """
+    Normalized throttle → commanded rotor speed, generated from the verified throttle
+    curve (spec.motor.throttle_to_speed):  Ω_c = (Ω_max−Ω_min)·√(k·u² + (1−k)·u) + Ω_min.
+    Returns f(u, w_min, w_max, k) — elementwise, broadcasts over any batch shape.
+    """
+    u, w_min, w_max, k = sp.symbols("u w_min w_max k", real=True)
+    return sp.lambdify((u, w_min, w_max, k),
+                       motor.throttle_to_speed(u, w_min, w_max, k), modules="jax")
+
+
+@lru_cache(maxsize=None)
+def imu_fn(n: int = 4, motor_model: str = "first_order"):
+    """
+    Exact IMU measurement (spec.sensors.imu) with v̇, ω̇ substituted from the full model:
+
+        f(s, u, p, p_BS, R_BS_flat) -> (6,) = (accel_S(3) specific force, gyro_S(3))
+
+    p_BS: sensor offset in the body frame (3,); R_BS_flat: sensor→body mounting rotation,
+    row-major (9,). Noise, bias, and sample-rate behavior stay harness-side (the spec's
+    sensor boundary). Single-vehicle; compose jax.vmap for fleets.
+    """
+    S, U, P = state_symbols(n), input_symbols(n), param_symbols(n)
+    sd = dynamics.statedot(S, U, P, motor_model)
+    v_dot, w_dot = sd[3:6, 0], sd[10:13, 0]
+    p_BS = sp.Matrix(sp.symbols("pBS_1:4", real=True))
+    R_BS = sp.Matrix(3, 3, sp.symbols("RBS_1:10", real=True))
+    accel, gyro = sensors.imu(S.q, v_dot, S.w, w_dot, p_BS, R_BS, P.grav)
+    raw = sp.lambdify((S.flat(), U.flat(), P.flat(), tuple(p_BS), tuple(R_BS)),
+                      sp.Matrix.vstack(accel, gyro), modules="jax", cse=True)
+
+    def f(s, u, p, p_BS, R_BS_flat):
+        return jnp.asarray(raw(s, u, p, p_BS, R_BS_flat)).reshape(-1)
+
+    return f
 
 
 def make_rollout(step, rotor_speed_min=0.0, rotor_speed_max=jnp.inf):

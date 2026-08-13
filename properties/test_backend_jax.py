@@ -127,6 +127,57 @@ def test_rollout_hover_equilibrium():
     _check(traj[0], np.asarray(manual), "scan vs manual step", tol=1e-12)
 
 
+def test_throttle_curve_endpoints_and_monotone():
+    f = backend.throttle_to_speed_fn()
+    u = jnp.linspace(0.0, 1.0, 101)
+    for k in (0.0, 0.5, 1.0):
+        w = np.asarray(f(u, 341.75, 3100.0, k))
+        np.testing.assert_allclose(w[0], 341.75, rtol=1e-12)
+        np.testing.assert_allclose(w[-1], 3100.0, rtol=1e-12)
+        assert (np.diff(w) > 0).all(), f"not monotone at k={k}"
+
+
+def test_param_slices_partition_and_values():
+    sl = backend.param_slices(N)
+    vals = params_dict()
+    p = flat_params(vals)
+    all_idx = np.concatenate([v for v in sl.values()])
+    assert sorted(all_idx.tolist()) == list(range(p.size)), "slices must partition the vector"
+    np.testing.assert_array_equal(p[sl["mass"]], [vals["mass"]])
+    np.testing.assert_array_equal(p[sl["ct2"]], vals["ct2"])
+    np.testing.assert_array_equal(p[sl["spin"]], vals["spin"])
+
+
+def test_imu_identity_mount_matches_statedot():
+    """p_BS=0, R_BS=I: accel must equal R(q)ᵀ(v̇ − g_W) with v̇ from the backend's own
+    statedot; gyro must equal ω. Also: exact hover measures (0, 0, +g)."""
+    rng = np.random.default_rng(5)
+    vals = params_dict(**FULL_MODEL)
+    p = flat_params(vals)
+    imu = backend.imu_fn(N, "first_order")
+    f = backend.statedot_fn(N, "first_order")
+    eye = np.eye(3).ravel()
+    for _ in range(5):
+        s = random_state(rng)
+        out = np.asarray(imu(s, RICH_INPUTS, p, np.zeros(3), eye))
+        v_dot = np.asarray(f(s, RICH_INPUTS, p))[3:6]
+        w_, x_, y_, z_ = s[6:10]
+        nrm = w_**2 + x_**2 + y_**2 + z_**2
+        R = np.array([
+            [w_**2 + x_**2 - y_**2 - z_**2, 2*(x_*y_ - w_*z_), 2*(x_*z_ + w_*y_)],
+            [2*(x_*y_ + w_*z_), w_**2 - x_**2 + y_**2 - z_**2, 2*(y_*z_ - w_*x_)],
+            [2*(x_*z_ - w_*y_), 2*(y_*z_ + w_*x_), w_**2 - x_**2 - y_**2 + z_**2]]) / nrm
+        _check(out[:3], R.T @ (v_dot - np.array([0, 0, -vals["grav"]])), "imu accel", 1e-9)
+        _check(out[3:], s[10:13], "imu gyro", 1e-12)
+    # Exact hover: level attitude, all rates zero, rotor speeds at hover.
+    vals_h = params_dict()
+    w_h = hover_speed(vals_h)
+    s_h = np.concatenate([np.zeros(6), [1, 0, 0, 0], np.zeros(3), np.full(N, w_h)])
+    u_h = make_inputs(W_c=np.full(N, w_h))
+    out = np.asarray(backend.imu_fn(N)(s_h, u_h, flat_params(vals_h), np.zeros(3), eye))
+    _check(out, np.array([0, 0, vals_h["grav"], 0, 0, 0]), "hover imu", 1e-9)
+
+
 def test_jacobian_is_finite():
     """Differentiability smoke: the generated code must admit finite forward-mode Jacobians
     at generic states (guards the planned differentiable variant)."""
