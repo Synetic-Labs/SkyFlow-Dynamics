@@ -21,7 +21,8 @@ def local_airspeed(v_a: sp.Matrix, w: sp.Matrix, r_i: sp.Matrix) -> sp.Matrix:
     return v_a + cross(w, r_i)
 
 
-def thrust_magnitude(W_i: sp.Expr, ct0: sp.Expr, ct1: sp.Expr, ct2: sp.Expr) -> sp.Expr:
+def thrust_magnitude(W_i: sp.Expr | float, ct0: sp.Expr | float, ct1: sp.Expr | float,
+                     ct2: sp.Expr | float) -> sp.Expr:
     """
     Rotor thrust magnitude (N) as a polynomial in rotor speed:
         T_i = ct0 + ct1·Ω_i + ct2·Ω_i²
@@ -29,21 +30,22 @@ def thrust_magnitude(W_i: sp.Expr, ct0: sp.Expr, ct1: sp.Expr, ct2: sp.Expr) -> 
     ⚠ Crazyflow's identified polynomials are per-RPM — convert ct1 by 60/2π, ct2 by (60/2π)².
     Sources: standard rotor model; Crazyflow first_principles/dynamics.py:121 + params.toml.
     """
-    return ct0 + ct1 * W_i + ct2 * W_i**2
+    return sp.sympify(ct0 + ct1 * W_i + ct2 * W_i**2)
 
 
-def torque_magnitude(W_i: sp.Expr, cq0: sp.Expr, cq1: sp.Expr, cq2: sp.Expr) -> sp.Expr:
+def torque_magnitude(W_i: sp.Expr | float, cq0: sp.Expr | float, cq1: sp.Expr | float,
+                     cq2: sp.Expr | float) -> sp.Expr:
     """
     Rotor aerodynamic drag-torque magnitude (N·m):
         Q_i = cq0 + cq1·Ω_i + cq2·Ω_i²
     cq2 ≡ k_m. The torque on the AIRFRAME opposes the rotor spin: τ_yaw,i = −s_i·Q_i·ê_i
     (assembled in spec.wrench). Source: as thrust_magnitude.
     """
-    return cq0 + cq1 * W_i + cq2 * W_i**2
+    return sp.sympify(cq0 + cq1 * W_i + cq2 * W_i**2)
 
 
-def aoa_thrust_factor(v_a: sp.Matrix, W_bar: sp.Expr, r_prop: sp.Expr,
-                      k_angle: sp.Expr, k_hor: sp.Expr) -> sp.Expr:
+def aoa_thrust_factor(v_a: sp.Matrix, W_bar: sp.Expr | float, r_prop: sp.Expr | float,
+                      k_angle: sp.Expr | float, k_hor: sp.Expr | float) -> sp.Expr:
     """
     Multiplicative thrust correction for rotor angle of attack α and advance-ratio angle μ
     (SkyDreamer, identified to racing speeds):
@@ -66,13 +68,14 @@ def aoa_thrust_factor(v_a: sp.Matrix, W_bar: sp.Expr, r_prop: sp.Expr,
     Identified: k_angle = 3.145, k_hor = 7.245, r_prop = 0.0635 m (5-inch racer).
     Source: SkyDreamer paper (arXiv:2510.14783) + reference implementation lines 270–280.
     """
+    vax, vay, vaz = v_a.flat()
     denom = r_prop * W_bar
-    alpha = sp.atan2(v_a[2], denom)
-    mu = sp.atan2(sp.sqrt(v_a[0]**2 + v_a[1]**2), denom)
+    alpha = sp.atan2(vaz, denom)
+    mu = sp.atan2(sp.sqrt(vax**2 + vay**2), denom)
     return 1 + k_angle * alpha + k_hor * mu
 
 
-def translational_lift(v_i: sp.Matrix, k_h: sp.Expr) -> sp.Expr:
+def translational_lift(v_i: sp.Matrix, k_h: sp.Expr | float) -> sp.Expr:
     """
     Translational lift: added thrust from in-plane airspeed over the rotor (N):
         ΔT_i = k_h · (v_i·x̂² + v_i·ŷ²)
@@ -81,10 +84,12 @@ def translational_lift(v_i: sp.Matrix, k_h: sp.Expr) -> sp.Expr:
     but NOT in the RotorPy paper, whose aero section (§II-B) lists only parasitic drag, rotor
     drag, and blade flapping.
     """
-    return k_h * (v_i[0]**2 + v_i[1]**2)
+    vix, viy, _ = v_i.flat()
+    return k_h * (vix**2 + viy**2)
 
 
-def rotor_drag_force(W_i: sp.Expr, v_i: sp.Matrix, k_d: sp.Expr, k_z: sp.Expr) -> sp.Matrix:
+def rotor_drag_force(W_i: sp.Expr | float, v_i: sp.Matrix, k_d: sp.Expr | float,
+                     k_z: sp.Expr | float) -> sp.Matrix:
     """
     Rotor drag ("H-force") at hub i, linear in rotor speed × local airspeed (N):
         H_i = −Ω_i · diag(k_d, k_d, k_z) · v_i
@@ -92,10 +97,11 @@ def rotor_drag_force(W_i: sp.Expr, v_i: sp.Matrix, k_d: sp.Expr, k_z: sp.Expr) -
     Strictly dissipative at the hub: H_i · v_i = −Ω_i (k_d(v_x²+v_y²) + k_z v_z²) ≤ 0.
     Sources: Mahony et al. 2012 §III; RotorPy paper §II-B.
     """
-    return -W_i * sp.Matrix([[k_d, 0, 0], [0, k_d, 0], [0, 0, k_z]]) * v_i
+    return -W_i * sp.diag(k_d, k_d, k_z) * v_i
 
 
-def flapping_moment(W_i: sp.Expr, v_i: sp.Matrix, k_flap: sp.Expr) -> sp.Matrix:
+def flapping_moment(W_i: sp.Expr | float, v_i: sp.Matrix,
+                    k_flap: sp.Expr | float) -> sp.Matrix:
     """
     Blade-flapping moment at hub i (N·m):
         M_flap,i = −k_flap · Ω_i · (v_i × ẑ)
@@ -106,10 +112,11 @@ def flapping_moment(W_i: sp.Expr, v_i: sp.Matrix, k_flap: sp.Expr) -> sp.Matrix:
     the verified reference exactly (golden-pinned).
     Source: Mahony et al. 2012 §III; RotorPy reference implementation (multirotor.py).
     """
-    return -k_flap * W_i * cross(v_i, EZ)
+    return cross(v_i, EZ) * (-k_flap * W_i)
 
 
-def rolling_moment(W_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, mu_R: sp.Expr) -> sp.Matrix:
+def rolling_moment(W_i: sp.Expr | float, s_i: sp.Expr | float, v_i: sp.Matrix,
+                   mu_R: sp.Expr | float) -> sp.Matrix:
     """
     CANDIDATE — per-rotor rolling moment from advancing/retreating blade lift dissymmetry:
     a hub TORQUE parallel to the in-plane airspeed, sign set by spin direction:
@@ -125,13 +132,14 @@ def rolling_moment(W_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, mu_R: sp.Expr) ->
     Source: PX4-SITL_gazebo-classic gazebo_motor_model.cpp; ethz-asl/rotors_simulator;
     Kai, Allibert, Hua, Hamel, IFAC 2017 Eq. (7).
     """
-    v_perp = sp.Matrix([v_i[0], v_i[1], 0])
-    return -W_i * s_i * mu_R * v_perp
+    vix, viy, _ = v_i.flat()
+    v_perp = sp.Matrix([vix, viy, 0])
+    return v_perp * (-W_i * s_i * mu_R)
 
 
-def flapping_force_kai(T_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, w: sp.Matrix,
-                       c_av: sp.Expr, c_bv: sp.Expr, c_aw: sp.Expr,
-                       c_bw: sp.Expr) -> sp.Matrix:
+def flapping_force_kai(T_i: sp.Expr | float, s_i: sp.Expr | float, v_i: sp.Matrix,
+                       w: sp.Matrix, c_av: sp.Expr | float, c_bv: sp.Expr | float,
+                       c_aw: sp.Expr | float, c_bw: sp.Expr | float) -> sp.Matrix:
     """
     CANDIDATE — blade-flapping FORCE with lateral (spin-signed) and body-rate components
     (Kai et al. 2017 Eq. (10)), body frame:
@@ -150,14 +158,17 @@ def flapping_force_kai(T_i: sp.Expr, s_i: sp.Expr, v_i: sp.Matrix, w: sp.Matrix,
     terms (c_aw, c_bw) are rotor-plane damping ABSENT from the verified tier.
     Source: Kai, Allibert, Hua, Hamel, IFAC World Congress 2017, Eqs. (10)–(13).
     """
-    v_perp = sp.Matrix([v_i[0], v_i[1], 0])
-    w_perp = sp.Matrix([w[0], w[1], 0])
+    vix, viy, _ = v_i.flat()
+    wx, wy, _ = w.flat()
+    v_perp = sp.Matrix([vix, viy, 0])
+    w_perp = sp.Matrix([wx, wy, 0])
     rt = sp.sqrt(T_i)
-    return (-rt * c_av * v_perp + s_i * rt * c_bv * cross(EZ, v_i)
-            + s_i * rt * c_bw * w_perp + rt * c_aw * cross(EZ, w))
+    return (v_perp * (-rt * c_av) + cross(EZ, v_i) * (s_i * rt * c_bv)
+            + w_perp * (s_i * rt * c_bw) + cross(EZ, w) * (rt * c_aw))
 
 
-def flapping_moment_body_rate(W_i: sp.Expr, w: sp.Matrix, k_flap_w: sp.Expr) -> sp.Matrix:
+def flapping_moment_body_rate(W_i: sp.Expr | float, w: sp.Matrix,
+                              k_flap_w: sp.Expr | float) -> sp.Matrix:
     """
     CANDIDATE — rotor damping moment in roll/pitch: the tip-path plane lags a rolling or
     pitching body (the first-harmonic flap angles carry p_w/Ω and 16·q_w/(γΩ) terms, γ =
@@ -179,11 +190,13 @@ def flapping_moment_body_rate(W_i: sp.Expr, w: sp.Matrix, k_flap_w: sp.Expr) -> 
     Source: JSBSim FGRotor.cpp calc_flapping_angles/body_moments (NASA TP-1285 eqns 32, 43;
     NACA TN-2136); Kai, Allibert, Hua, Hamel, IFAC 2017 Eq. (7).
     """
-    w_perp = sp.Matrix([w[0], w[1], 0])
-    return -k_flap_w * W_i * w_perp
+    wx, wy, _ = w.flat()
+    w_perp = sp.Matrix([wx, wy, 0])
+    return w_perp * (-k_flap_w * W_i)
 
 
-def blade_profile_drag(C_T: sp.Expr, a: sp.Expr, sigma: sp.Expr) -> sp.Expr:
+def blade_profile_drag(C_T: sp.Expr | float, a: sp.Expr | float,
+                       sigma: sp.Expr | float) -> sp.Expr:
     """
     CANDIDATE — blade profile-drag coefficient from a simplified Bailey drag polar in the
     MEAN BLADE INCIDENCE ᾱ = 6·C_T/(a·σ) — the mean lift coefficient 6·C_T/σ divided by
@@ -198,12 +211,13 @@ def blade_profile_drag(C_T: sp.Expr, a: sp.Expr, sigma: sp.Expr) -> sp.Expr:
     chord c). Feeds bramwell_torque.
     Source: JSBSim FGRotor.cpp calc_torque; polar lineage per Bailey, NACA Rep. 716 (1941).
     """
-    return 0.009 + 0.3 * (6 * C_T / (a * sigma))**2
+    return sp.sympify(0.009 + 0.3 * (6 * C_T / (a * sigma))**2)
 
 
-def bramwell_torque(T: sp.Expr, H: sp.Expr, mu: sp.Expr, lam: sp.Expr, rho: sp.Expr,
-                    blades: sp.Expr, chord: sp.Expr, R: sp.Expr, Omega: sp.Expr,
-                    delta: sp.Expr) -> sp.Expr:
+def bramwell_torque(T: sp.Expr | float, H: sp.Expr | float, mu: sp.Expr | float,
+                    lam: sp.Expr | float, rho: sp.Expr | float, blades: sp.Expr | float,
+                    chord: sp.Expr | float, R: sp.Expr | float, Omega: sp.Expr | float,
+                    delta: sp.Expr | float) -> sp.Expr:
     """
     CANDIDATE — rotor shaft (drag) torque with flight-condition dependence:
 
@@ -226,7 +240,7 @@ def bramwell_torque(T: sp.Expr, H: sp.Expr, mu: sp.Expr, lam: sp.Expr, rho: sp.E
     """
     profile = rho * blades * chord * delta * (Omega * R)**2 * R**2 \
         * (1 + sp.Rational(9, 2) * mu**2) / 8
-    return profile - (T * lam + H * mu) * R
+    return sp.sympify(profile - (T * lam + H * mu) * R)
 
 
 def parasitic_drag(v_a: sp.Matrix, c_D: sp.Matrix) -> sp.Matrix:
@@ -241,8 +255,10 @@ def parasitic_drag(v_a: sp.Matrix, c_D: sp.Matrix) -> sp.Matrix:
     reference implementation (−‖v_a‖·C·v_a, quadratic, multirotor.py); the spec follows the
     implementation, which the golden vectors pin.
     """
-    speed = sp.sqrt(v_a[0]**2 + v_a[1]**2 + v_a[2]**2)
-    return -speed * sp.Matrix([[c_D[0], 0, 0], [0, c_D[1], 0], [0, 0, c_D[2]]]) * v_a
+    vax, vay, vaz = v_a.flat()
+    cdx, cdy, cdz = c_D.flat()
+    speed = sp.sqrt(vax**2 + vay**2 + vaz**2)
+    return -speed * sp.diag(cdx, cdy, cdz) * v_a
 
 
 def linear_drag(v_a: sp.Matrix, c_L: sp.Matrix) -> sp.Matrix:
@@ -257,14 +273,16 @@ def linear_drag(v_a: sp.Matrix, c_L: sp.Matrix) -> sp.Matrix:
     (c_L ≈ k_d·ΣΩ_hover in-plane); identify a vehicle against ONE of the two forms, not both.
     Sources: Faessler et al. RA-L 2018; crazyflow first_principles/dynamics.py:127.
     """
-    return -sp.Matrix([[c_L[0], 0, 0], [0, c_L[1], 0], [0, 0, c_L[2]]]) * v_a
+    clx, cly, clz = c_L.flat()
+    return -sp.diag(clx, cly, clz) * v_a
 
 
-def vertical_climb_drag(v_a: sp.Matrix, k_v2: sp.Expr) -> sp.Matrix:
+def vertical_climb_drag(v_a: sp.Matrix, k_v2: sp.Expr | float) -> sp.Matrix:
     """
     Collective vertical airspeed-squared thrust term at the CoM, body ẑ (N):
         D_z = −k_v2 · v_az · |v_az| · ẑ
     The vertical companion of the AoA thrust model (SkyDreamer; identified k_v2 = 0 for their
     5-inch racer, kept for generality). Source: SkyDreamer paper + implementation.
     """
-    return sp.Matrix([0, 0, -k_v2 * v_a[2] * sp.Abs(v_a[2])])
+    _, _, vaz = v_a.flat()
+    return sp.Matrix([0, 0, -k_v2 * vaz * sp.Abs(vaz)])

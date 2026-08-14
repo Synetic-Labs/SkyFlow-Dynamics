@@ -4,8 +4,8 @@ with its own continuous form as dt → 0."""
 import numpy as np
 import sympy as sp
 
-from skyflow_dynamics.spec import simplified
 from properties.helpers import random_unit_quaternion
+from skyflow_dynamics.spec import simplified
 
 
 def _sym(name, n=3):
@@ -18,7 +18,7 @@ def test_ballistic_exact():
     x, v = _sym("x"), _sym("v")
     dt, g = sp.symbols("dt g", positive=True)
     q = sp.Matrix(sp.symbols("q_w q_x q_y q_z", real=True))
-    x2, v2, _, w2 = simplified.step(x, v, q, 0, sp.Matrix([0, 0, 0]) + sp.Matrix(_sym("eps")) * 0, dt, g)
+    x2, v2, _, _ = simplified.step(x, v, q, 0, sp.Matrix([0, 0, 0]) + sp.Matrix(_sym("eps")) * 0, dt, g)
     assert sp.simplify(x2 - (x + dt * v)) == sp.zeros(3, 1)
     assert sp.simplify(v2 - (v + dt * sp.Matrix([0, 0, -g]))) == sp.zeros(3, 1)
 
@@ -39,7 +39,7 @@ def test_quaternion_stays_unit_numeric():
     w = _sym("w")
     dt, g, c = sp.symbols("dt g c", positive=True)
     _, _, q2, _ = simplified.step(x, v, q, c, w, dt, g)
-    fn = sp.lambdify((list(q), list(w), dt), q2.T * q2, modules="numpy")
+    fn = sp.lambdify((q.flat(), w.flat(), dt), q2.T * q2, modules="numpy")
     for _ in range(20):
         qn = random_unit_quaternion(rng)
         wn = rng.uniform(-6, 6, 3)
@@ -57,7 +57,7 @@ def test_step_consistent_with_continuous_dynamics():
     step_out = simplified.step(x, v, q, c, w, dt, g)
     cont_out = simplified.dynamics(v, q, c, w, g)
 
-    args = (list(x), list(v), list(q), list(w), c, g, dt)
+    args = (x.flat(), v.flat(), q.flat(), w.flat(), c, g, dt)
     fd = {name: sp.lambdify(args, (step_out[i] - [x, v, q][i]) / dt, modules="numpy")
           for name, i in (("x", 0), ("v", 1), ("q", 2))}
     ct = {name: sp.lambdify(args[:-1], cont_out[i], modules="numpy")
@@ -75,15 +75,13 @@ def test_step_consistent_with_continuous_dynamics():
 def test_rate_command_is_body_frame():
     # ω_cmd about body z from a 90°-rolled attitude must rotate about the WORLD x-axis
     # direction consistent with q ⊗ exp(dt·ω): body-frame right multiplication.
-    x = np.zeros(3)
-    v = np.zeros(3)
     roll90 = np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0, 0])  # +90° about body x
     xs, vs = _sym("x"), _sym("v")
     qs = sp.Matrix(sp.symbols("q_w q_x q_y q_z", real=True))
     ws = _sym("w")
     dt, g, c = sp.symbols("dt g c", positive=True)
     _, _, q2, _ = simplified.step(xs, vs, qs, c, ws, dt, g)
-    fn = sp.lambdify((list(qs), list(ws), dt), q2, modules="numpy")
+    fn = sp.lambdify((qs.flat(), ws.flat(), dt), q2, modules="numpy")
     got = np.asarray(fn(roll90, [0, 0, 2.0], 0.01), float).ravel()
     # Independent check: q ⊗ exp — body-frame composition (right multiply).
     half = 0.5 * 0.02  # ½·‖dt·ω‖

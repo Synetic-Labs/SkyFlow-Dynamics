@@ -9,9 +9,9 @@ bridge (battery-voltage coupling, current draw, sag) that the identified τ_m hi
 import sympy as sp
 
 
-def dc_motor_speed_dynamics(W: sp.Expr, V_m: sp.Expr, J_r: sp.Expr, K_q: sp.Expr,
-                            K_e: sp.Expr, R_a: sp.Expr, k_m: sp.Expr,
-                            b: sp.Expr) -> sp.Expr:
+def dc_motor_speed_dynamics(W: sp.Expr | float, V_m: sp.Expr | float, J_r: sp.Expr | float, K_q: sp.Expr | float,
+                            K_e: sp.Expr | float, R_a: sp.Expr | float, k_m: sp.Expr | float,
+                            b: sp.Expr | float) -> sp.Expr:
     """
     Quasi-static DC motor (inductance neglected: τ_e = L_a/R_a ≈ 1.4 ms ≪ mechanical) with
     quadratic aerodynamic load:
@@ -31,17 +31,17 @@ def dc_motor_speed_dynamics(W: sp.Expr, V_m: sp.Expr, J_r: sp.Expr, K_q: sp.Expr
     Eqs. (6)–(7). JSBSim's torque-balance shaft dynamics is the same structure with table
     aerodynamic power.
     """
-    return ((K_q / R_a) * (V_m - K_e * W) - k_m * W**2 - b * W) / J_r
+    return sp.sympify(((K_q / R_a) * (V_m - K_e * W) - k_m * W**2 - b * W) / J_r)
 
 
-def esc_mean_voltage(u: sp.Expr, V_batt: sp.Expr) -> sp.Expr:
+def esc_mean_voltage(u: sp.Expr | float, V_batt: sp.Expr | float) -> sp.Expr:
     """Averaged inverter: V_m = u·V_batt, u = duty ∈ [0,1].
     Source: standard; documented verbatim in crazyflie-firmware platform_defaults_cf2.h:58."""
-    return u * V_batt
+    return sp.sympify(u * V_batt)
 
 
-def steady_state_speed(u: sp.Expr, V_batt: sp.Expr, K_q: sp.Expr, K_e: sp.Expr,
-                       R_a: sp.Expr, k_m: sp.Expr, b: sp.Expr) -> sp.Expr:
+def steady_state_speed(u: sp.Expr | float, V_batt: sp.Expr | float, K_q: sp.Expr | float, K_e: sp.Expr | float,
+                       R_a: sp.Expr | float, k_m: sp.Expr | float, b: sp.Expr | float) -> sp.Expr:
     """
     Battery-coupled steady state of dc_motor_speed_dynamics (Ω̇ = 0), positive root of
     k_m·Ω² + (K_q·K_e/R_a + b)·Ω − (K_q/R_a)·u·V_batt = 0:
@@ -55,8 +55,8 @@ def steady_state_speed(u: sp.Expr, V_batt: sp.Expr, K_q: sp.Expr, K_e: sp.Expr,
     return (-beta + sp.sqrt(beta**2 + 4 * k_m * (K_q / R_a) * u * V_batt)) / (2 * k_m)
 
 
-def crazyflie_thrust_from_voltage(v_m: sp.Expr, C0: sp.Expr, C1: sp.Expr,
-                                  C2: sp.Expr, C3: sp.Expr) -> sp.Expr:
+def crazyflie_thrust_from_voltage(v_m: sp.Expr | float, C0: sp.Expr | float, C1: sp.Expr | float,
+                                  C2: sp.Expr | float, C3: sp.Expr | float) -> sp.Expr:
     """
     Crazyflie firmware static per-motor model (current master):
 
@@ -70,12 +70,12 @@ def crazyflie_thrust_from_voltage(v_m: sp.Expr, C0: sp.Expr, C1: sp.Expr,
     Source: bitcraze/crazyflie-firmware, src/drivers/src/motors.c
     (motorsCompensateBatteryVoltage) + platform_defaults_cf2.h:57–91.
     """
-    return C0 + C1 * v_m + C2 * v_m**2 + C3 * v_m**3
+    return sp.sympify(C0 + C1 * v_m + C2 * v_m**2 + C3 * v_m**3)
 
 
-def thevenin_battery(SOC: sp.Expr, i_batt: sp.Expr, V_TS: sp.Expr, V_TL: sp.Expr,
-                     V_OC, R_S, R_TS: sp.Expr, C_TS: sp.Expr,
-                     R_TL: sp.Expr, C_TL: sp.Expr, C_cap: sp.Expr) -> tuple:
+def thevenin_battery(SOC: sp.Expr | float, i_batt: sp.Expr | float, V_TS: sp.Expr | float, V_TL: sp.Expr | float,
+                     V_OC, R_S, R_TS: sp.Expr | float, C_TS: sp.Expr | float,
+                     R_TL: sp.Expr | float, C_TL: sp.Expr | float, C_cap: sp.Expr | float) -> tuple:
     """
     Thevenin equivalent-circuit battery (OCV–SoC + series R + two RC branches):
 
@@ -102,7 +102,7 @@ def thevenin_battery(SOC: sp.Expr, i_batt: sp.Expr, V_TS: sp.Expr, V_TL: sp.Expr
     return soc_dot, vts_dot, vtl_dot, v_batt
 
 
-def chen_ocv(SOC: sp.Expr) -> sp.Expr:
+def chen_ocv(SOC: sp.Expr | float) -> sp.Expr:
     """The Chen & Rincon-Mora fitted single-cell LiPo open-circuit voltage (V)."""
     return (-1.031 * sp.exp(-35 * SOC) + 3.685 + 0.2156 * SOC
             - 0.1178 * SOC**2 + 0.3201 * SOC**3)

@@ -31,10 +31,11 @@ import json
 import pathlib
 import subprocess
 import sys
-import tomllib
 import types
+from typing import Any
 
 import numpy as np
+import tomllib
 
 RPM2RAD = 2 * np.pi / 60
 RNG_SEED = 20260810
@@ -42,18 +43,20 @@ N_CASES = 8
 
 
 def install_stubs():
-    jax = types.ModuleType("jax")
+    # Any-typed handles: stub modules take arbitrary attributes by design.
+    jax: Any = types.ModuleType("jax")
     jax.numpy = types.ModuleType("jax.numpy")
     jax.Array = type("Array", (), {})
     jax.device_put = lambda x, device=None: x
     jax.jit = lambda *a, **k: (a[0] if a and callable(a[0]) else (lambda f: f))
     sys.modules.setdefault("jax", jax)
     sys.modules.setdefault("jax.numpy", jax.numpy)
-    flax = types.ModuleType("flax")
-    flax.struct = types.ModuleType("flax.struct")
-    flax.struct.dataclass = dataclasses.dataclass
+    flax: Any = types.ModuleType("flax")
+    struct: Any = types.ModuleType("flax.struct")
+    struct.dataclass = dataclasses.dataclass
+    flax.struct = struct
     sys.modules.setdefault("flax", flax)
-    sys.modules.setdefault("flax.struct", flax.struct)
+    sys.modules.setdefault("flax.struct", struct)
     from unittest.mock import MagicMock
     sys.modules.setdefault("casadi", MagicMock())  # symbolic path only; absorbs import-time use
 
@@ -65,8 +68,8 @@ def import_crazyflow_dynamics(root: pathlib.Path):
     from unittest.mock import MagicMock
     sys.path.insert(0, str(root))
 
-    def bare(name: str, path: pathlib.Path):
-        mod = types.ModuleType(name)
+    def bare(name: str, path: pathlib.Path) -> Any:
+        mod: Any = types.ModuleType(name)
         mod.__path__ = [str(path)]
         sys.modules[name] = mod
         return mod
@@ -80,7 +83,9 @@ def import_crazyflow_dynamics(root: pathlib.Path):
     utils_pkg.rotation = rotation
     sys.modules["crazyflow.dynamics.symbols"] = MagicMock()  # symbolic path only
 
-    from crazyflow.dynamics.first_principles.dynamics import dynamics
+    from crazyflow.dynamics.first_principles.dynamics import (  # pyright: ignore[reportMissingImports]
+        dynamics,
+    )
     return dynamics
 
 
@@ -156,7 +161,7 @@ def main():
         })
 
     commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, check=False).stdout.strip()
     doc = {
         "schema": 1, "kind": "statedot", "name": f"crazyflow_{args.drone}",
         "motor_model": "asymmetric",
@@ -166,7 +171,7 @@ def main():
             "source": "Crazyflow first-principles dynamics (Synetic-Labs/crazyflow fork), "
                       "actual running code via bare-package shim",
             "source_commit": commit,
-            "date": datetime.date.today().isoformat(),
+            "date": datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
             "notes": "prop_inertia ACTIVE: gyro term correct at/after learnsyslab/crazyflow "
                      "PR #86 (merged 2026-07-13; F-3 roll-row sign fix). quat_dot excluded "
                      "(scalar-first Xi applied to xyzw storage, unused by their integrator). "

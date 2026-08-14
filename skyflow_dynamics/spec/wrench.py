@@ -19,8 +19,8 @@ only the base thrust; the lift term adds after.
 
 import sympy as sp
 
-from skyflow_dynamics.spec.frames import EZ, cross
 from skyflow_dynamics.spec import rotor_aero
+from skyflow_dynamics.spec.frames import EZ, cross
 
 
 def body_wrench(w: sp.Matrix, W: sp.Matrix, v_a: sp.Matrix, p) -> tuple:
@@ -30,7 +30,8 @@ def body_wrench(w: sp.Matrix, W: sp.Matrix, v_a: sp.Matrix, p) -> tuple:
     world frame by the rigid-body equations). p is a spec.symbols.Params.
     """
     n = p.n
-    W_bar = sum(W) / n
+    Ws = W.flat()
+    W_bar = sum(Ws) / n
     factor = rotor_aero.aoa_thrust_factor(v_a, W_bar, p.r_prop, p.k_angle, p.k_hor)
 
     F = rotor_aero.parasitic_drag(v_a, p.c_D) + rotor_aero.linear_drag(v_a, p.c_L) \
@@ -38,16 +39,16 @@ def body_wrench(w: sp.Matrix, W: sp.Matrix, v_a: sp.Matrix, p) -> tuple:
     M = sp.zeros(3, 1)
     for i in range(n):
         v_i = rotor_aero.local_airspeed(v_a, w, p.rotor_pos[i])
-        T_i = rotor_aero.thrust_magnitude(W[i], p.ct0[i], p.ct1[i], p.ct2[i]) * factor \
+        T_i = rotor_aero.thrust_magnitude(Ws[i], p.ct0[i], p.ct1[i], p.ct2[i]) * factor \
             + rotor_aero.translational_lift(v_i, p.k_h)
-        H_i = rotor_aero.rotor_drag_force(W[i], v_i, p.k_d, p.k_z)
-        Q_i = rotor_aero.torque_magnitude(W[i], p.cq0[i], p.cq1[i], p.cq2[i])
+        H_i = rotor_aero.rotor_drag_force(Ws[i], v_i, p.k_d, p.k_z)
+        Q_i = rotor_aero.torque_magnitude(Ws[i], p.cq0[i], p.cq1[i], p.cq2[i])
 
         thrust_vec = T_i * p.axis[i]
         F += thrust_vec + H_i
         M += cross(p.rotor_pos[i], thrust_vec + H_i)          # thrust/drag moments
         M += -p.spin[i] * Q_i * p.axis[i]                      # yaw reaction (opposes spin)
-        M += rotor_aero.flapping_moment(W[i], v_i, p.k_flap)   # blade flapping
+        M += rotor_aero.flapping_moment(Ws[i], v_i, p.k_flap)  # blade flapping
     return F, M
 
 

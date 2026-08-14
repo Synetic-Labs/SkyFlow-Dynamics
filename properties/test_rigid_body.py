@@ -3,11 +3,19 @@
 import numpy as np
 import sympy as sp
 
+from properties.helpers import (
+    P,
+    S,
+    U,
+    flat_params,
+    hover_speed,
+    make_inputs,
+    params_dict,
+    statedot_fn,
+)
 from skyflow_dynamics.spec import quaternion as Q
 from skyflow_dynamics.spec.discretization import rk4_step
 from skyflow_dynamics.spec.frames import cross, hat
-from properties.helpers import (P, S, U, flat_params, hover_speed, make_inputs,
-                                params_dict, statedot_fn, unit_subs)
 
 
 def test_hover_is_exact_equilibrium():
@@ -34,9 +42,9 @@ def test_hover_speed_symbolic():
         subs[P.axis[i][2]] = 1
     for sym in (*S.x, *S.v, *S.w, *U.v_wind, *U.F_ext, *U.tau_ext):
         subs[sym] = 0
-    for sym, v in zip(S.q, (1, 0, 0, 0)):
+    for sym, v in zip(S.q.flat(), (1, 0, 0, 0)):
         subs[sym] = v
-    vz_dot = statedot(S, U, P)[5].subs(subs)
+    vz_dot = statedot(S, U, P).flat()[5].subs(subs)
     sols = sp.solve(sp.Eq(vz_dot, 0), w_sym)
     expected = sp.sqrt(P.mass * P.grav / (4 * P.ct2[0]))
     assert any(sp.simplify(s - expected) == 0 for s in sols)

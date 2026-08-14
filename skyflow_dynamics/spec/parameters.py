@@ -9,8 +9,6 @@ yaw-torque sign — the negative of this).
 
 import math
 
-import sympy as sp
-
 from skyflow_dynamics.spec.symbols import Params
 
 #: name → (units, description). Shapes: () scalar, (n,) per-rotor, (3,) vector, (n,3) per-rotor vector.
@@ -65,7 +63,7 @@ def substitution(p: Params, values: dict) -> dict:
     """Map a numeric parameter dict onto the Params symbols → {symbol: value} for subs/lambdify."""
     validate(values)
     n = p.n
-    sub = {p.mass: values["mass"], p.grav: values["grav"],
+    sub: dict = {p.mass: values["mass"], p.grav: values["grav"],
            p.tau_m: values["tau_m"], p.ka1: values["ka1"], p.ka2: values["ka2"],
            p.kd1: values["kd1"], p.kd2: values["kd2"], p.I_rot: values["I_rot"],
            p.k_d: values["k_d"], p.k_z: values["k_z"], p.k_flap: values["k_flap"],

@@ -4,7 +4,13 @@ reference parameter sets valid against the schema."""
 import importlib
 
 from skyflow_dynamics.spec.parameters import CRAZYFLIE, SCHEMA, validate
-from skyflow_dynamics.spec.registry import EXCLUSIONS, SOURCES, TERMS, by_key, validate_registry
+from skyflow_dynamics.spec.registry import (
+    EXCLUSIONS,
+    SOURCES,
+    TERMS,
+    by_key,
+    validate_registry,
+)
 
 
 def test_registry_validates():

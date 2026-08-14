@@ -50,7 +50,7 @@ def test_lever_arm_centripetal():
     p = _sym("p")
     g = sp.Symbol("g", positive=True)
     accel, _ = sensors.imu(sp.Matrix([1, 0, 0, 0]), vdot, w, wdot, p, sp.eye(3), g)
-    fn = sp.lambdify((list(vdot), list(w), list(wdot), list(p), g), accel, modules="numpy")
+    fn = sp.lambdify((vdot.flat(), w.flat(), wdot.flat(), p.flat(), g), accel, modules="numpy")
     got = np.asarray(fn([0, 0, 0], [0, 0, r_val], [0, 0, 0], [d_val, 0, 0], g_val), float).ravel()
     np.testing.assert_allclose(got, [-r_val**2 * d_val, 0, g_val], atol=1e-14)
 
@@ -63,7 +63,7 @@ def test_lever_arm_frames_consistent():
     p = _sym("p")
     g = sp.Symbol("g", positive=True)
     accel, _ = sensors.imu(Qs, vdot_w, w_b, wdot_b, p, sp.eye(3), g)
-    fn = sp.lambdify((list(Qs), list(vdot_w), list(w_b), list(wdot_b), list(p), g),
+    fn = sp.lambdify((Qs.flat(), vdot_w.flat(), w_b.flat(), wdot_b.flat(), p.flat(), g),
                      accel, modules="numpy")
 
     from properties.helpers import random_unit_quaternion

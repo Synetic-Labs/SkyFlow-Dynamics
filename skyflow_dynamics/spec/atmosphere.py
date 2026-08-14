@@ -20,34 +20,36 @@ P0 = 101325.0       # Pa sea level
 LAPSE_TROPO = -0.0065  # K/m (troposphere, h < 11 km)
 
 
-def temperature_troposphere(h: sp.Expr) -> sp.Expr:
+def temperature_troposphere(h: sp.Expr | float) -> sp.Expr:
     """T(h) = T0 + L·h, L = −6.5 K/km, valid to 11 km (geopotential altitude)."""
-    return T0 + LAPSE_TROPO * h
+    return sp.sympify(T0 + LAPSE_TROPO * h)
 
 
-def pressure_gradient_layer(h: sp.Expr, T_b: sp.Expr = T0, P_b: sp.Expr = P0,
-                            L_b: sp.Expr = LAPSE_TROPO, h_b: sp.Expr = 0) -> sp.Expr:
+def pressure_gradient_layer(h: sp.Expr | float, T_b: sp.Expr | float = T0,
+                            P_b: sp.Expr | float = P0, L_b: sp.Expr | float = LAPSE_TROPO,
+                            h_b: sp.Expr | float = 0) -> sp.Expr:
     """USSA-1976 Eq. 33a (gradient layer): P = P_b·(T_b/(T_b + L_b(h−h_b)))^(g0/(R·L_b))."""
     return P_b * (T_b / (T_b + L_b * (h - h_b)))**(G0 / (R_DRY * L_b))
 
 
-def density(P: sp.Expr, T: sp.Expr) -> sp.Expr:
+def density(P: sp.Expr | float, T: sp.Expr | float) -> sp.Expr:
     """Ideal gas: ρ = P/(R_dry·T). Sea level: 1.225 kg/m³."""
-    return P / (R_DRY * T)
+    return sp.sympify(P / (R_DRY * T))
 
 
-def speed_of_sound(T: sp.Expr) -> sp.Expr:
+def speed_of_sound(T: sp.Expr | float) -> sp.Expr:
     """a = √(γ·R_dry·T)."""
     return sp.sqrt(GAMMA_AIR * R_DRY * T)
 
 
-def advance_ratio(V_a: sp.Expr, n: sp.Expr, D: sp.Expr) -> sp.Expr:
+def advance_ratio(V_a: sp.Expr | float, n: sp.Expr | float, D: sp.Expr | float) -> sp.Expr:
     """J = V_a/(n·D): axial hub airspeed over (rev/s × diameter). JSBSim guards n ≥ 0.01
     rev/s (its J = V/D fallback below that is a numerical hack — do not copy)."""
-    return V_a / (n * D)
+    return sp.sympify(V_a / (n * D))
 
 
-def propeller_thrust(C_T, J: sp.Expr, rho: sp.Expr, n: sp.Expr, D: sp.Expr) -> sp.Expr:
+def propeller_thrust(C_T, J: sp.Expr | float, rho: sp.Expr | float, n: sp.Expr | float,
+                     D: sp.Expr | float) -> sp.Expr:
     """
     Classic fixed-pitch propeller parameterization with measured coefficient tables:
 

@@ -13,7 +13,7 @@ talbot_inflow_factor, which scales the induced VELOCITY (use one route, never bo
 import sympy as sp
 
 
-def cheeseman_bennett(z: sp.Expr, R: sp.Expr) -> sp.Expr:
+def cheeseman_bennett(z: sp.Expr | float, R: sp.Expr | float) -> sp.Expr:
     """
     Single-rotor in-ground-effect thrust ratio (potential flow, method of images):
 
@@ -25,10 +25,10 @@ def cheeseman_bennett(z: sp.Expr, R: sp.Expr) -> sp.Expr:
     Source: Cheeseman & Bennett, ARC R&M 3021, 1955 (as Eqs. (1)–(2) of Sanchez-Cuevas 2017).
     ⚠ Known to UNDER-predict for a full multirotor (fountain effect) — see sanchez_cuevas.
     """
-    return 1 / (1 - (R / (4 * z))**2)
+    return sp.sympify(1 / (1 - (R / (4 * z))**2))
 
 
-def cheeseman_bennett_forward(z: sp.Expr, R: sp.Expr, V: sp.Expr, v_i: sp.Expr) -> sp.Expr:
+def cheeseman_bennett_forward(z: sp.Expr | float, R: sp.Expr | float, V: sp.Expr | float, v_i: sp.Expr | float) -> sp.Expr:
     """
     Forward-flight generalization — ground effect washes out with horizontal speed V:
 
@@ -36,10 +36,10 @@ def cheeseman_bennett_forward(z: sp.Expr, R: sp.Expr, V: sp.Expr, v_i: sp.Expr) 
     Source: Cheeseman & Bennett 1955 (commonly cited form; verify against R&M 3021 before
     promotion — flagged by the intake sweep).
     """
-    return 1 / (1 - (R / (4 * z))**2 / (1 + (V / v_i)**2))
+    return sp.sympify(1 / (1 - (R / (4 * z))**2 / (1 + (V / v_i)**2)))
 
 
-def sanchez_cuevas(z: sp.Expr, R: sp.Expr, d: sp.Expr, b: sp.Expr, K_b: sp.Expr) -> sp.Expr:
+def sanchez_cuevas(z: sp.Expr | float, R: sp.Expr | float, d: sp.Expr | float, b: sp.Expr | float, K_b: sp.Expr | float) -> sp.Expr:
     """
     Quadrotor ground effect with mirrored-rotor interference and body lift (fountain effect):
 
@@ -58,8 +58,8 @@ def sanchez_cuevas(z: sp.Expr, R: sp.Expr, d: sp.Expr, b: sp.Expr, K_b: sp.Expr)
                 - 2 * R**2 * K_b * z / (b**2 + 4 * z**2)**sp.Rational(3, 2))
 
 
-def talbot_inflow_factor(h: sp.Expr, k_ge: sp.Expr, h_shift: sp.Expr,
-                         load: sp.Expr) -> sp.Expr:
+def talbot_inflow_factor(h: sp.Expr | float, k_ge: sp.Expr | float, h_shift: sp.Expr | float,
+                         load: sp.Expr | float) -> sp.Expr:
     """
     In-ground-effect INFLOW reduction, exponential in height (JSBSim FGRotor form):
 
@@ -86,7 +86,7 @@ def talbot_inflow_factor(h: sp.Expr, k_ge: sp.Expr, h_shift: sp.Expr,
     return 1 - load * sp.exp(-k_ge * (h + h_shift))
 
 
-def pybullet_ground_effect(T_i: sp.Expr, z_i: sp.Expr, R: sp.Expr, G: sp.Expr) -> sp.Expr:
+def pybullet_ground_effect(T_i: sp.Expr | float, z_i: sp.Expr | float, R: sp.Expr | float, G: sp.Expr | float) -> sp.Expr:
     """
     gym-pybullet-drones per-rotor additive thrust increment (linearized Cheeseman–Bennett):
 
@@ -99,11 +99,11 @@ def pybullet_ground_effect(T_i: sp.Expr, z_i: sp.Expr, R: sp.Expr, G: sp.Expr) -
     Source: utiasDSL/gym-pybullet-drones BaseAviary._groundEffect (L688–715) + cf2x.urdf;
     model form from Shi et al. 2019 (Neural-Lander), Eq. (15).
     """
-    return T_i * G * (R / (4 * z_i))**2
+    return sp.sympify(T_i * G * (R / (4 * z_i))**2)
 
 
-def pybullet_downwash_force(dz: sp.Expr, dxy: sp.Expr, R: sp.Expr,
-                            c1: sp.Expr, c2: sp.Expr, c3: sp.Expr) -> sp.Expr:
+def pybullet_downwash_force(dz: sp.Expr | float, dxy: sp.Expr | float, R: sp.Expr | float,
+                            c1: sp.Expr | float, c2: sp.Expr | float, c3: sp.Expr | float) -> sp.Expr:
     """
     Empirical vehicle-to-vehicle downwash: downward force on the lower vehicle's CoM from a
     vehicle hovering Δz above at horizontal offset Δxy:
@@ -120,8 +120,8 @@ def pybullet_downwash_force(dz: sp.Expr, dxy: sp.Expr, R: sp.Expr,
     return -alpha * sp.exp(-sp.Rational(1, 2) * (dxy / beta)**2)
 
 
-def jain_wake_velocity(z: sp.Expr, r: sp.Expr, T: sp.Expr, rho: sp.Expr, A_p: sp.Expr,
-                       L: sp.Expr, z0: sp.Expr, c_ax: sp.Expr, c_rad: sp.Expr) -> sp.Expr:
+def jain_wake_velocity(z: sp.Expr | float, r: sp.Expr | float, T: sp.Expr | float, rho: sp.Expr | float, A_p: sp.Expr | float,
+                       L: sp.Expr | float, z0: sp.Expr | float, c_ax: sp.Expr | float, c_rad: sp.Expr | float) -> sp.Expr:
     """
     Physically grounded downwash: the upper vehicle's wake as an axisymmetric turbulent jet
     (zone of established flow, z > 3L), axial velocity at axial/radial separation (z, r):

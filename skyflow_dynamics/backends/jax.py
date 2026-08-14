@@ -27,7 +27,7 @@ zero-order-held inputs). Command transport delay, control-rate ZOH scheduling, d
 resampling and RNG stay harness-side (see README) and belong to the consuming simulator.
 """
 
-from functools import lru_cache
+from functools import cache
 
 import jax
 import jax.numpy as jnp
@@ -76,14 +76,14 @@ def pack_params(values: dict) -> jnp.ndarray:
     return jnp.asarray([float(sub[sym]) for sym in P.flat()])
 
 
-@lru_cache(maxsize=None)
+@cache
 def _tau_m_index(n: int) -> int:
     """Position of τ_m in the flat parameter vector (needed by the exact-exp split)."""
     P = param_symbols(n)
     return P.flat().index(P.tau_m)
 
 
-@lru_cache(maxsize=None)
+@cache
 def statedot_fn(n: int = 4, motor_model: str = "first_order"):
     """
     The continuous model ṡ = f(s, u, p) as a JAX function (13+n,) — code-generated from
@@ -101,7 +101,7 @@ def statedot_fn(n: int = 4, motor_model: str = "first_order"):
     return f
 
 
-@lru_cache(maxsize=None)
+@cache
 def rk4_step_fn(n: int = 4, motor_model: str = "first_order"):
     """
     One fixed-step RK4 step s⁺ = step(s, u, p, dt) over the full model — the reference
@@ -117,7 +117,7 @@ def rk4_step_fn(n: int = 4, motor_model: str = "first_order"):
     return step
 
 
-@lru_cache(maxsize=None)
+@cache
 def exact_exp_step_fn(n: int = 4):
     """
     RK4 step with the exact-exponential motor splitting (first-order lag only —
@@ -157,7 +157,7 @@ def post_step(s, rotor_speed_min, rotor_speed_max):
     return jnp.concatenate([s[..., :6], q, s[..., 10:13], W], axis=-1)
 
 
-@lru_cache(maxsize=None)
+@cache
 def param_slices(n: int = 4) -> dict:
     """
     SCHEMA name → index array into the flat parameter vector (pack_params order).
@@ -188,7 +188,7 @@ def param_slices(n: int = 4) -> dict:
     return {k: np.asarray(v) for k, v in out.items()}
 
 
-@lru_cache(maxsize=None)
+@cache
 def throttle_to_speed_fn():
     """
     Normalized throttle → commanded rotor speed, generated from the verified throttle
@@ -200,7 +200,7 @@ def throttle_to_speed_fn():
                        motor.throttle_to_speed(u, w_min, w_max, k), modules="jax")
 
 
-@lru_cache(maxsize=None)
+@cache
 def imu_fn(n: int = 4, motor_model: str = "first_order"):
     """
     Exact IMU measurement (spec.sensors.imu) with v̇, ω̇ substituted from the full model:
@@ -213,11 +213,11 @@ def imu_fn(n: int = 4, motor_model: str = "first_order"):
     """
     S, U, P = state_symbols(n), input_symbols(n), param_symbols(n)
     sd = dynamics.statedot(S, U, P, motor_model)
-    v_dot, w_dot = sd[3:6, 0], sd[10:13, 0]
+    v_dot, w_dot = sp.Matrix(sd[3:6, 0]), sp.Matrix(sd[10:13, 0])
     p_BS = sp.Matrix(sp.symbols("pBS_1:4", real=True))
     R_BS = sp.Matrix(3, 3, sp.symbols("RBS_1:10", real=True))
     accel, gyro = sensors.imu(S.q, v_dot, S.w, w_dot, p_BS, R_BS, P.grav)
-    raw = sp.lambdify((S.flat(), U.flat(), P.flat(), tuple(p_BS), tuple(R_BS)),
+    raw = sp.lambdify((S.flat(), U.flat(), P.flat(), tuple(p_BS.flat()), tuple(R_BS.flat())),
                       sp.Matrix.vstack(accel, gyro), modules="jax", cse=True)
 
     def f(s, u, p, p_BS, R_BS_flat):

@@ -15,6 +15,23 @@ Conventions (see README.md for the full statement):
 `spec.registry` lists every term with its tier (verified/candidate), sources, and tests.
 """
 
-from skyflow_dynamics.spec import quaternion, frames, symbols, motor, rotor_aero, wrench, rigid_body  # noqa: F401
-from skyflow_dynamics.spec import dynamics, simplified, discretization, sensors, parameters, registry  # noqa: F401
-from skyflow_dynamics.spec import atmosphere, ground_effect, inflow, motor_electrical, wind  # noqa: F401
+from skyflow_dynamics.spec import (  # noqa: F401  # noqa: F401  # noqa: F401
+    atmosphere,
+    discretization,
+    dynamics,
+    frames,
+    ground_effect,
+    inflow,
+    motor,
+    motor_electrical,
+    parameters,
+    quaternion,
+    registry,
+    rigid_body,
+    rotor_aero,
+    sensors,
+    simplified,
+    symbols,
+    wind,
+    wrench,
+)

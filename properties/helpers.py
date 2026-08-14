@@ -3,7 +3,7 @@ Shared machinery for the property tests: canonical n=4 symbols, cached lambdifie
 parameter bindings, and seeded random states.
 """
 
-from functools import lru_cache
+from functools import cache
 
 import numpy as np
 import sympy as sp
@@ -18,12 +18,12 @@ U = input_symbols(N)
 P = param_symbols(N)
 
 
-@lru_cache(maxsize=None)
+@cache
 def statedot_expr(motor_model: str = "first_order") -> sp.Matrix:
     return statedot(S, U, P, motor_model)
 
 
-@lru_cache(maxsize=None)
+@cache
 def statedot_fn(motor_model: str = "first_order"):
     """Numeric f(s_flat, u_flat, p_flat) -> (13+N,) ndarray."""
     fn = sp.lambdify((S.flat(), U.flat(), P.flat()), statedot_expr(motor_model),

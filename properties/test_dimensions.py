@@ -9,7 +9,14 @@ point tests miss. Angles are dimensionless (rad).
 
 import numpy as np
 
-from properties.helpers import N, flat_params, make_inputs, params_dict, random_state, statedot_fn
+from properties.helpers import (
+    N,
+    flat_params,
+    make_inputs,
+    params_dict,
+    random_state,
+    statedot_fn,
+)
 
 # (L, M, T) exponents.
 DIM_STATE = [(1, 0, 0)] * 3 + [(1, 0, -1)] * 3 + [(0, 0, 0)] * 4 + [(0, 0, -1)] * 3 + [(0, 0, -1)] * N
@@ -41,11 +48,11 @@ def _scale(dims, lL, lM, lT):
 
 
 def _everything_on(motor_model):
-    kw = dict(ct0=[1e-4] * 4, ct1=[1e-6] * 4,
-              cq0=[1e-6] * 4, cq1=[1e-8] * 4,
-              c_D=[0.02, 0.03, 0.05], c_L=[0.01, 0.012, 0.008],
-              k_flap=1.5e-7, I_rot=3.452e-8,
-              k_h=0.0, k_angle=3.145, k_hor=7.245, k_v2=1e-4)
+    kw = {"ct0": [1e-4] * 4, "ct1": [1e-6] * 4,
+          "cq0": [1e-6] * 4, "cq1": [1e-8] * 4,
+          "c_D": [0.02, 0.03, 0.05], "c_L": [0.01, 0.012, 0.008],
+          "k_flap": 1.5e-7, "I_rot": 3.452e-8,
+          "k_h": 0.0, "k_angle": 3.145, "k_hor": 7.245, "k_v2": 1e-4}
     if motor_model == "asymmetric":
         kw.update(ka1=13.996, ka2=1.1e-4, kd1=5.933, kd2=3.2e-4)
     return params_dict(**kw)

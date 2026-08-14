@@ -27,8 +27,8 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path.cwd()))
 
-from rotorpy.vehicles.multirotor import Multirotor  # noqa: E402
-from rotorpy.vehicles.crazyflie_params import quad_params as CF  # noqa: E402
+from rotorpy.vehicles.crazyflie_params import quad_params as CF  # type: ignore
+from rotorpy.vehicles.multirotor import Multirotor  # type: ignore
 
 RNG_SEED = 20260810
 N_CASES = 5
@@ -37,7 +37,6 @@ N_CASES = 5
 def spec_params(m: Multirotor, aero: bool) -> dict:
     """Map a constructed Multirotor's parameters into SkyFlow canonical form."""
     n = m.num_rotors
-    z = [0.0] * n
     on = aero
     coef = m.rotor_dyn_coef
     return {
@@ -161,14 +160,14 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                            text=True).stdout.strip()
+                            text=True, check=False).stdout.strip()
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, check=False).stdout.strip()
     provenance = {
         "generator": "golden/generate/gen_rotorpy.py",
         "source": "RotorPy (spencerfolk/rotorpy) — Multirotor NumPy dynamics, canonical path",
         "source_branch": branch, "source_commit": commit,
-        "date": datetime.date.today().isoformat(),
+        "date": datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
         "conventions": "converted to SkyFlow canonical: quaternion wxyz, spin=-rotor_directions,"
                        " wind/external wrench as inputs, aero=False -> aero coefficients zeroed",
     }

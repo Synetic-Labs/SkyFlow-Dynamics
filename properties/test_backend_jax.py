@@ -11,19 +11,33 @@ import pytest
 
 jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
-import jax.numpy as jnp  # noqa: E402  (needs the x64 flag set first)
+import jax.numpy as jnp
 
+from properties.helpers import (
+    N,
+    flat_params,
+    hover_speed,
+    make_inputs,
+    params_dict,
+    random_state,
+    statedot_fn,
+)
+from properties.test_golden import (
+    BLOCKS,
+    FILES,
+    _check,
+    _flat_inputs,
+    _flat_state,
+    _load,
+    _params,
+)
 from skyflow_dynamics.backends import jax as backend
-from properties.helpers import (N, flat_params, hover_speed, make_inputs, params_dict,
-                                random_state, statedot_fn)
-from properties.test_golden import (BLOCKS, FILES, _check, _flat_inputs, _flat_state,
-                                    _load, _params)
 
 #: Parameter overrides that light up every aero/motor path of the model at once
 #: (k_h stays 0 — it is mutually exclusive with k_angle/k_hor by the validation rule).
-FULL_MODEL = dict(I_rot=1e-8, k_flap=1e-7, k_angle=3.145, k_hor=7.245, k_v2=1e-4,
-                  c_D=[1e-4, 1e-4, 2e-4], c_L=[1e-3, 1e-3, 0.0],
-                  ka1=9.0, ka2=2e-4, kd1=6.0, kd2=1e-4)
+FULL_MODEL = {"I_rot": 1e-8, "k_flap": 1e-7, "k_angle": 3.145, "k_hor": 7.245, "k_v2": 1e-4,
+              "c_D": [1e-4, 1e-4, 2e-4], "c_L": [1e-3, 1e-3, 0.0],
+              "ka1": 9.0, "ka2": 2e-4, "kd1": 6.0, "kd2": 1e-4}
 
 RICH_INPUTS = make_inputs(v_wind=(1.0, -2.0, 0.5), F_ext=(0.01, 0.0, -0.02),
                           tau_ext=(1e-5, -2e-5, 3e-5))

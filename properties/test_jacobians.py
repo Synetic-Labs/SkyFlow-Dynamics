@@ -5,13 +5,22 @@ and the artifact a differentiable backend will consume."""
 import numpy as np
 import sympy as sp
 
-from properties.helpers import (P, S, U, flat_params, make_inputs, params_dict,
-                                random_state, statedot_expr, statedot_fn)
+from properties.helpers import (
+    P,
+    S,
+    U,
+    flat_params,
+    make_inputs,
+    params_dict,
+    random_state,
+    statedot_expr,
+    statedot_fn,
+)
 
 
 def test_jacobian_matches_finite_differences():
     F = statedot_expr()
-    diff_vars = list(S.flat()) + list(U.W_c) + list(U.v_wind)
+    diff_vars = list(S.flat()) + U.W_c.flat() + U.v_wind.flat()
     J = F.jacobian(sp.Matrix(diff_vars))
     Jfn = sp.lambdify((S.flat(), U.flat(), P.flat()), J, modules="numpy", cse=True)
     f = statedot_fn()
@@ -25,12 +34,13 @@ def test_jacobian_matches_finite_differences():
         u = make_inputs(W_c=rng.uniform(900, 2300, 4), v_wind=rng.uniform(-2, 2, 3))
         J_sym = np.asarray(Jfn(s, u, p), dtype=float)
 
-        n_s, n_u = len(s), len(u)
+        n_s = len(s)
         J_fd = np.zeros_like(J_sym)
         base = np.concatenate([s, u[:4], u[4:7]])
         for k in range(len(base)):
             eps = 1e-6 * max(1.0, abs(base[k]))
-            def eval_at(delta):
+
+            def eval_at(delta, base=base, k=k, n_s=n_s, u=u):
                 z = base.copy()
                 z[k] += delta
                 s_k = z[:n_s]

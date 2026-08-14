@@ -14,7 +14,7 @@ machinery, listed so nothing is lost).
 The INTAKE.md protocol appends candidates here; promotion to verified requires golden vectors.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -435,8 +435,8 @@ TERMS = (
 
 #: Sources reviewed and rejected, so intake doesn't re-litigate them.
 EXCLUSIONS = (
-    ("genesis", "Genesis (Genesis-Embodied-AI): props are fixed joints, KF·rpm² force + "
-     "KM·rpm² yaw torque only, no gyroscopic effects — strict subset of this spec."),
+    ("genesis", ("Genesis (Genesis-Embodied-AI): props are fixed joints, KF·rpm² force + "
+                 "KM·rpm² yaw torque only, no gyroscopic effects — strict subset of this spec.")),
 )
 
 

@@ -50,7 +50,9 @@ def load_skydreamer(path: pathlib.Path):
               "def njit(*a, **k):\n"
               "    return a[0] if a and callable(a[0]) else (lambda f: f)\n")
     ns = {}
-    exec(header + src[p_start:p_end] + "\n" + src[start:end], ns)
+    # Deliberate: executes the pinned reference source verbatim (sha256 recorded in the
+    # provenance block) so the golden vectors come from the actual published code.
+    exec(header + src[p_start:p_end] + "\n" + src[start:end], ns)  # noqa: S102
     return ns["compute_dynamics_jit"], ns["SKYDREAMER_PARAMS"]
 
 
@@ -135,7 +137,7 @@ def main():
                       "The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py (ENU)",
             "source_file": str(path),
             "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            "date": datetime.date.today().isoformat(),
+            "date": datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
             "notes": "Force side + rotor lag only. Moments are per-rotor identified k_p/k_q/k_r "
                      "(not structural r x F) — not comparable. Per-axis quadratic drag "
                      "(k_x2/k_y2) zeroed: different model than |v|-scaled parasitic drag. "

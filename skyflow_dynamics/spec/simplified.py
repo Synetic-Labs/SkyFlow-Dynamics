@@ -38,18 +38,18 @@ from skyflow_dynamics.spec import quaternion
 from skyflow_dynamics.spec.frames import gravity_world
 
 
-def step(x: sp.Matrix, v: sp.Matrix, q: sp.Matrix, c: sp.Expr, w_cmd: sp.Matrix,
-         dt: sp.Expr, grav: sp.Expr) -> tuple:
+def step(x: sp.Matrix, v: sp.Matrix, q: sp.Matrix, c: sp.Expr | float, w_cmd: sp.Matrix,
+         dt: sp.Expr | float, grav: sp.Expr | float) -> tuple:
     """One discrete step of the point-mass model → (x⁺, v⁺, q⁺, ω⁺)."""
     R = quaternion.rotation_matrix(q)
-    x_next = x + dt * v
-    v_next = v + dt * (gravity_world(grav) + R * sp.Matrix([0, 0, c]))
-    q_next = quaternion.product(q, quaternion.from_rotation_vector(dt * w_cmd))
+    x_next = x + v * dt
+    v_next = v + (gravity_world(grav) + R * sp.Matrix([0, 0, c])) * dt
+    q_next = quaternion.product(q, quaternion.from_rotation_vector(w_cmd * dt))
     return x_next, v_next, q_next, w_cmd
 
 
-def dynamics(v: sp.Matrix, q: sp.Matrix, c: sp.Expr, w_cmd: sp.Matrix,
-             grav: sp.Expr) -> tuple:
+def dynamics(v: sp.Matrix, q: sp.Matrix, c: sp.Expr | float, w_cmd: sp.Matrix,
+             grav: sp.Expr | float) -> tuple:
     """Continuous form → (ẋ, v̇, q̇): rates follow the command exactly (ω ≡ ω_cmd)."""
     R = quaternion.rotation_matrix(q)
     return v, gravity_world(grav) + R * sp.Matrix([0, 0, c]), quaternion.kinematics(q, w_cmd)

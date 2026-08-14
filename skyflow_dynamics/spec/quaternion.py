@@ -15,8 +15,8 @@ import sympy as sp
 
 def product(p: sp.Matrix, q: sp.Matrix) -> sp.Matrix:
     """Hamilton product p ⊗ q (scalar-first)."""
-    pw, px, py, pz = p
-    qw, qx, qy, qz = q
+    pw, px, py, pz = p.flat()
+    qw, qx, qy, qz = q.flat()
     return sp.Matrix([
         pw*qw - px*qx - py*qy - pz*qz,
         pw*qx + px*qw + py*qz - pz*qy,
@@ -27,11 +27,13 @@ def product(p: sp.Matrix, q: sp.Matrix) -> sp.Matrix:
 
 def conjugate(q: sp.Matrix) -> sp.Matrix:
     """q* = (w, −x, −y, −z). For unit q this is the inverse."""
-    return sp.Matrix([q[0], -q[1], -q[2], -q[3]])
+    w, x, y, z = q.flat()
+    return sp.Matrix([w, -x, -y, -z])
 
 
 def norm_squared(q: sp.Matrix) -> sp.Expr:
-    return q[0]**2 + q[1]**2 + q[2]**2 + q[3]**2
+    w, x, y, z = q.flat()
+    return w**2 + x**2 + y**2 + z**2
 
 
 def rotation_matrix(q: sp.Matrix) -> sp.Matrix:
@@ -47,7 +49,7 @@ def rotation_matrix(q: sp.Matrix) -> sp.Matrix:
     the spec's RK4 step disagrees with the references at O(‖q‖²−1) — found by the rk4-step
     golden vectors.
     """
-    w, x, y, z = q
+    w, x, y, z = q.flat()
     n = w**2 + x**2 + y**2 + z**2
     return sp.Matrix([
         [w**2 + x**2 - y**2 - z**2, 2*(x*y - w*z),             2*(x*z + w*y)],
@@ -63,16 +65,19 @@ def rotate(q: sp.Matrix, r: sp.Matrix) -> sp.Matrix:
     rotation_matrix(q)·r for ALL q ≠ 0, consistent with rotation_matrix's deliberate
     scale-invariance (off-manifold RK stage states — see rotation_matrix's docstring).
     """
-    sandwich = product(product(q, sp.Matrix([0, r[0], r[1], r[2]])), conjugate(q))[1:4, 0]
-    return sandwich / norm_squared(q)
+    rx, ry, rz = r.flat()
+    _, sx, sy, sz = product(product(q, sp.Matrix([0, rx, ry, rz])), conjugate(q)).flat()
+    return sp.Matrix([sx, sy, sz]) / norm_squared(q)
 
 
 def kinematics(q: sp.Matrix, omega_body: sp.Matrix) -> sp.Matrix:
     """q̇ = ½ · q ⊗ (0, ω_B) — attitude rate for body-frame angular velocity."""
-    return product(q, sp.Matrix([0, omega_body[0], omega_body[1], omega_body[2]])) / 2
+    wx, wy, wz = omega_body.flat()
+    return product(q, sp.Matrix([0, wx, wy, wz])) / 2
 
 
-def kinematics_norm_corrected(q: sp.Matrix, omega_body: sp.Matrix, K: sp.Expr) -> sp.Matrix:
+def kinematics_norm_corrected(q: sp.Matrix, omega_body: sp.Matrix,
+                              K: sp.Expr | float) -> sp.Matrix:
     """
     Kinematics with Lagrange-multiplier norm-drift stabilization (gain K ≥ 0, units 1/s):
 
@@ -100,10 +105,11 @@ def from_rotation_vector(phi: sp.Matrix) -> sp.Matrix:
     command; spec.simplified.step composes this at dt·ω_cmd). Backends MUST substitute the
     Taylor form for small θ:  q ≈ (1 − θ²/8,  φ·(1/2 − θ²/48)).
     """
-    theta = sp.sqrt(phi[0]**2 + phi[1]**2 + phi[2]**2)
+    px, py, pz = phi.flat()
+    theta = sp.sqrt(px**2 + py**2 + pz**2)
     return sp.Matrix([
         sp.cos(theta / 2),
-        sp.sin(theta / 2) * phi[0] / theta,
-        sp.sin(theta / 2) * phi[1] / theta,
-        sp.sin(theta / 2) * phi[2] / theta,
+        sp.sin(theta / 2) * px / theta,
+        sp.sin(theta / 2) * py / theta,
+        sp.sin(theta / 2) * pz / theta,
     ])

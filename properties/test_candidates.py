@@ -4,7 +4,15 @@ terms, identities against their defining equations, and identified-parameter san
 import numpy as np
 import sympy as sp
 
-from skyflow_dynamics.spec import atmosphere, ground_effect, inflow, motor_electrical, quaternion, rotor_aero, wind
+from skyflow_dynamics.spec import (
+    atmosphere,
+    ground_effect,
+    inflow,
+    motor_electrical,
+    quaternion,
+    rotor_aero,
+    wind,
+)
 from skyflow_dynamics.spec.frames import EZ
 
 z, R, d, b, V, v_i = sp.symbols("z R d b V v_i", positive=True)
@@ -172,12 +180,13 @@ def test_flapping_force_pairwise_cancellation():
 def test_flapping_moment_body_rate_is_dissipative():
     W = sp.Symbol("W", positive=True)
     k = sp.Symbol("k_fw", positive=True)
-    w = sp.Matrix(sp.symbols("w1 w2 w3", real=True))
+    w1, w2, w3 = sp.symbols("w1 w2 w3", real=True)
+    w = sp.Matrix([w1, w2, w3])
     M = rotor_aero.flapping_moment_body_rate(W, w, k)
     assert M[2] == 0                                           # roll/pitch damping only
     # ω·M = −k·Ω·(ω_x² + ω_y²) ≤ 0: strictly dissipative on the in-plane rates.
     power = sp.expand((w.T * M)[0, 0])
-    assert sp.simplify(power + k * W * (w[0]**2 + w[1]**2)) == 0
+    assert sp.simplify(power + k * W * (w1**2 + w2**2)) == 0
     # Spin-sign-free: a counter-rotating pair at equal speed DOUBLES the moment (contrast
     # rolling_moment, which cancels pairwise).
     assert sp.simplify(2 * M - (M + rotor_aero.flapping_moment_body_rate(W, w, k))) \
@@ -294,7 +303,7 @@ def test_dryden_low_altitude_anchors():
     # The fit's built-in anchor: at h = 1000 ft, 0.177 + 0.000823·1000 = 1.0 exactly, so
     # L_u = L_v = h and σ_u = σ_v = σ_w. (The 1000–2000 ft band then interpolates toward the
     # mid-altitude L = 1750 ft constant.)
-    L_u, L_v, L_w, s_u, s_v, s_w = wind.dryden_low_altitude_scales(1000.0, 30.0)
+    L_u, _, L_w, s_u, _, s_w = wind.dryden_low_altitude_scales(1000.0, 30.0)
     assert abs(float(L_u) - 1000.0) < 1e-9
     assert float(L_w) == 1000.0
     assert abs(float(s_w) - 3.0) < 1e-12          # 0.1·W20

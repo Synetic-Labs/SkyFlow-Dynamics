@@ -17,7 +17,7 @@ import sympy as sp
 s = sp.Symbol("s")
 
 
-def dryden_filter_u(sigma_u: sp.Expr, L_u: sp.Expr, V: sp.Expr) -> sp.Expr:
+def dryden_filter_u(sigma_u: sp.Expr | float, L_u: sp.Expr | float, V: sp.Expr | float) -> sp.Expr:
     """
     Longitudinal forming filter (MIL-F-8785C), unit-PSD white noise → gust velocity u_g:
 
@@ -29,7 +29,7 @@ def dryden_filter_u(sigma_u: sp.Expr, L_u: sp.Expr, V: sp.Expr) -> sp.Expr:
     return sigma_u * sp.sqrt(2 * L_u / (sp.pi * V)) / (1 + (L_u / V) * s)
 
 
-def dryden_filter_vw(sigma: sp.Expr, L: sp.Expr, V: sp.Expr) -> sp.Expr:
+def dryden_filter_vw(sigma: sp.Expr | float, L: sp.Expr | float, V: sp.Expr | float) -> sp.Expr:
     """
     Lateral/vertical forming filter (MIL-F-8785C):
 
@@ -45,7 +45,7 @@ def dryden_filter_vw(sigma: sp.Expr, L: sp.Expr, V: sp.Expr) -> sp.Expr:
         / (1 + (L / V) * s)**2
 
 
-def dryden_low_altitude_scales(h: sp.Expr, W20: sp.Expr) -> tuple:
+def dryden_low_altitude_scales(h: sp.Expr | float, W20: sp.Expr | float) -> tuple:
     """
     Low-altitude closures (10 ft < h < 1000 ft, h in FEET — the published fit is imperial):
 
@@ -63,7 +63,7 @@ def dryden_low_altitude_scales(h: sp.Expr, W20: sp.Expr) -> tuple:
     return L_u, L_u, h, sigma_u, sigma_u, sigma_w
 
 
-def von_karman_psd_u(omega_spatial: sp.Expr, sigma_u: sp.Expr, L_u: sp.Expr) -> sp.Expr:
+def von_karman_psd_u(omega_spatial: sp.Expr | float, sigma_u: sp.Expr | float, L_u: sp.Expr | float) -> sp.Expr:
     """
     von Kármán longitudinal spatial PSD (MIL-F-8785C convention, a = 1.339):
 
@@ -76,7 +76,7 @@ def von_karman_psd_u(omega_spatial: sp.Expr, sigma_u: sp.Expr, L_u: sp.Expr) -> 
     return sigma_u**2 * (2 * L_u / sp.pi) / (1 + (1.339 * L_u * omega_spatial)**2)**sp.Rational(5, 6)
 
 
-def log_wind_shear(h: sp.Expr, W20: sp.Expr, z0: sp.Expr) -> sp.Expr:
+def log_wind_shear(h: sp.Expr | float, W20: sp.Expr | float, z0: sp.Expr | float) -> sp.Expr:
     """
     MIL-F-8785C mean-wind (shear) profile — magnitude logarithmic in height AGL:
 
@@ -95,7 +95,7 @@ def log_wind_shear(h: sp.Expr, W20: sp.Expr, z0: sp.Expr) -> sp.Expr:
     return W20 * sp.log(h / z0) / sp.log(20 / z0)
 
 
-def one_minus_cosine_gust(x: sp.Expr, V_m: sp.Expr, d_m: sp.Expr) -> sp.Expr:
+def one_minus_cosine_gust(x: sp.Expr | float, V_m: sp.Expr | float, d_m: sp.Expr | float) -> sp.Expr:
     """
     MIL-F-8785C discrete gust, per axis; x = distance penetrated into the gust:
 

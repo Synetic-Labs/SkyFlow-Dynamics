@@ -9,7 +9,7 @@ rpg_flightning (exact-exponential discretization).
 import sympy as sp
 
 
-def first_order_lag(W: sp.Matrix, W_c: sp.Matrix, tau_m: sp.Expr) -> sp.Matrix:
+def first_order_lag(W: sp.Matrix, W_c: sp.Matrix, tau_m: sp.Expr | float) -> sp.Matrix:
     """
     Ω̇ᵢ = (Ω_cᵢ − Ωᵢ) / τ_m   — the standard identified motor model.
     Identified τ_m: Crazyflie 0.072 s, brushless ~0.05 s.
@@ -18,7 +18,7 @@ def first_order_lag(W: sp.Matrix, W_c: sp.Matrix, tau_m: sp.Expr) -> sp.Matrix:
 
 
 def asymmetric_lag(W: sp.Matrix, W_c: sp.Matrix,
-                   ka1: sp.Expr, ka2: sp.Expr, kd1: sp.Expr, kd2: sp.Expr) -> sp.Matrix:
+                   ka1: sp.Expr | float, ka2: sp.Expr | float, kd1: sp.Expr | float, kd2: sp.Expr | float) -> sp.Matrix:
     """
     Crazyflow's asymmetric spin-up/spin-down motor model (motors brake slower than they
     accelerate — un-powered deceleration relies on aero drag):
@@ -40,7 +40,7 @@ def asymmetric_lag(W: sp.Matrix, W_c: sp.Matrix,
     return sp.Matrix([elem(W[i], W_c[i]) for i in range(W.shape[0])])
 
 
-def exact_exp_step(W0: sp.Matrix, W_c: sp.Matrix, dt: sp.Expr, tau_m: sp.Expr) -> sp.Matrix:
+def exact_exp_step(W0: sp.Matrix, W_c: sp.Matrix, dt: sp.Expr | float, tau_m: sp.Expr | float) -> sp.Matrix:
     """
     Closed-form (exact) discretization of the linear first-order lag over a step where Ω_c is
     held constant (zero-order hold):
@@ -58,7 +58,7 @@ def exact_exp_step(W0: sp.Matrix, W_c: sp.Matrix, dt: sp.Expr, tau_m: sp.Expr) -
     return W_c + (W0 - W_c) * sp.exp(-dt / tau_m)
 
 
-def throttle_to_speed(u: sp.Expr, W_min: sp.Expr, W_max: sp.Expr, k: sp.Expr) -> sp.Expr:
+def throttle_to_speed(u: sp.Expr | float, W_min: sp.Expr | float, W_max: sp.Expr | float, k: sp.Expr | float) -> sp.Expr:
     """
     Normalized throttle u ∈ [0,1] → steady-state rotor speed (the ESC+battery command path):
 
@@ -72,7 +72,7 @@ def throttle_to_speed(u: sp.Expr, W_min: sp.Expr, W_max: sp.Expr, k: sp.Expr) ->
     return (W_max - W_min) * sp.sqrt(k * u**2 + (1 - k) * u) + W_min
 
 
-def pwm_quantize(u: sp.Expr, pwm_min: sp.Expr, pwm_max: sp.Expr) -> sp.Expr:
+def pwm_quantize(u: sp.Expr | float, pwm_min: sp.Expr | float, pwm_max: sp.Expr | float) -> sp.Expr:
     """
     ESC PWM quantization: snap normalized throttle to the integer PWM grid,
         u_q = round(u · (pwm_max − pwm_min)) / (pwm_max − pwm_min).
@@ -85,7 +85,7 @@ def pwm_quantize(u: sp.Expr, pwm_min: sp.Expr, pwm_max: sp.Expr) -> sp.Expr:
     return sp.floor(u * levels + sp.Rational(1, 2)) / levels
 
 
-def voltage_to_rpm(V: sp.Expr, b0: sp.Expr, b1: sp.Expr) -> sp.Expr:
+def voltage_to_rpm(V: sp.Expr | float, b0: sp.Expr | float, b1: sp.Expr | float) -> sp.Expr:
     """
     Battery/ESC supply voltage → achievable rotor speed (RPM in the identified source):
         Ω_max(V) = b0 + b1·V.
@@ -94,4 +94,4 @@ def voltage_to_rpm(V: sp.Expr, b0: sp.Expr, b1: sp.Expr) -> sp.Expr:
     Used as a multiplicative cap Ω_max(t) on the motor command — a slow parameter drift, not a
     fast dynamic; the battery state itself (SoC, sag) is a harness-side model.
     """
-    return b0 + b1 * V
+    return sp.sympify(b0 + b1 * V)

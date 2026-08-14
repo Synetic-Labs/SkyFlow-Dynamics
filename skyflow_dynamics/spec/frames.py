@@ -16,10 +16,11 @@ EZ = sp.Matrix([0, 0, 1])
 
 def hat(v: sp.Matrix) -> sp.Matrix:
     """Skew-symmetric (cross-product) matrix: hat(v) @ u == v × u."""
+    x, y, z = v.flat()
     return sp.Matrix([
-        [0,     -v[2],  v[1]],
-        [v[2],   0,    -v[0]],
-        [-v[1],  v[0],  0],
+        [0,  -z,  y],
+        [z,   0, -x],
+        [-y,  x,  0],
     ])
 
 
@@ -28,6 +29,6 @@ def cross(a: sp.Matrix, b: sp.Matrix) -> sp.Matrix:
     return hat(a) * b
 
 
-def gravity_world(g: sp.Expr) -> sp.Matrix:
+def gravity_world(g: sp.Expr | float) -> sp.Matrix:
     """Gravitational acceleration in the world frame: (0, 0, −g), g > 0 in m/s²."""
     return sp.Matrix([0, 0, -g])

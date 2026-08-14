@@ -34,3 +34,8 @@ packages = ["skyflow_dynamics"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["properties"]
+
+[tool.pyright]
+# Resolve imports against the project venv (matches the Pylance/pyright CLI setup).
+venvPath = "."
+venv = ".venv"

@@ -12,8 +12,8 @@ import pathlib
 import numpy as np
 import pytest
 
-from skyflow_dynamics.spec.discretization import rk4_step
 from properties.helpers import N, flat_params, statedot_fn
+from skyflow_dynamics.spec.discretization import rk4_step
 
 VECTOR_DIR = pathlib.Path(__file__).resolve().parent.parent / "golden" / "vectors"
 FILES = sorted(VECTOR_DIR.glob("*.json"))
@@ -74,14 +74,14 @@ def test_golden(path):
 
         dt = doc["dt"]
         if kind == "step_ode":
-            s_next = rk4_step(lambda t, x: f(x, u, p), s, dt)
+            s_next = rk4_step(lambda t, x, u=u: f(x, u, p), s, dt)
         elif kind == "step_exact_exp":
             # Operator split: rotor speed follows the closed form at stage times, its ODE slot
             # is held; after the step it is set to Ω(dt) analytically.
             tau = doc["params"]["tau_m"]
             W0, Wc = s[13:13 + N], u[:N]
 
-            def f_split(t, x):
+            def f_split(t, x, u=u, W0=W0, Wc=Wc, tau=tau):
                 x = x.copy()
                 x[13:13 + N] = Wc + (W0 - Wc) * np.exp(-t / tau)
                 out = f(x, u, p)

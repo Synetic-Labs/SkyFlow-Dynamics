@@ -10,13 +10,15 @@ band (descent rates between ≈0.5·v_h and ≈2·v_h) — see vrs_boundaries.
 import sympy as sp
 
 
-def hover_induced_velocity(T: sp.Expr, rho: sp.Expr, A: sp.Expr) -> sp.Expr:
+def hover_induced_velocity(T: sp.Expr | float, rho: sp.Expr | float,
+                           A: sp.Expr | float) -> sp.Expr:
     """v_h = √(T/(2ρA)) — hover induced velocity; A = πR² disk area.
     Source: classical momentum theory (Leishman; Bangura et al. arXiv:1601.00733 Eq. (4))."""
     return sp.sqrt(T / (2 * rho * A))
 
 
-def induced_velocity_axial(V_a: sp.Expr, T: sp.Expr, rho: sp.Expr, A: sp.Expr) -> sp.Expr:
+def induced_velocity_axial(V_a: sp.Expr | float, T: sp.Expr | float, rho: sp.Expr | float,
+                           A: sp.Expr | float) -> sp.Expr:
     """
     Induced velocity for axial flow through the disk (JSBSim's sign-safe form):
 
@@ -39,7 +41,8 @@ def induced_velocity_axial(V_a: sp.Expr, T: sp.Expr, rho: sp.Expr, A: sp.Expr) -
     )
 
 
-def oblique_momentum_thrust(v_i: sp.Expr, V: sp.Matrix, rho: sp.Expr, A: sp.Expr) -> sp.Expr:
+def oblique_momentum_thrust(v_i: sp.Expr | float, V: sp.Matrix, rho: sp.Expr | float,
+                            A: sp.Expr | float) -> sp.Expr:
     """
     Momentum thrust in oblique flight (implicit in v_i — solve by Newton iteration):
 
@@ -53,11 +56,13 @@ def oblique_momentum_thrust(v_i: sp.Expr, V: sp.Matrix, rho: sp.Expr, A: sp.Expr
     Source: Bangura & Mahony, ACRA 2012 Eqs. (10a),(10b),(11); Bangura et al. ICRA 2014
     Eqs. (3)–(10); arXiv:1601.00733.
     """
-    U = sp.sqrt(V[0]**2 + V[1]**2 + (v_i - V[2])**2)
+    Vx, Vy, Vz = V.flat()
+    U = sp.sqrt(Vx**2 + Vy**2 + (v_i - Vz)**2)
     return 2 * rho * A * v_i * U
 
 
-def dynamic_inflow_lag(nu: sp.Expr, nu_eq: sp.Expr, tau: sp.Expr) -> sp.Expr:
+def dynamic_inflow_lag(nu: sp.Expr | float, nu_eq: sp.Expr | float,
+                       tau: sp.Expr | float) -> sp.Expr:
     """
     First-order dynamic inflow: the induced-inflow ratio ν relaxes to its momentum
     equilibrium ν_eq = C_T / (2√(μ² + λ²)) with time constant τ ≈ 16/(γΩ) (γ = Lock number):
@@ -68,7 +73,7 @@ def dynamic_inflow_lag(nu: sp.Expr, nu_eq: sp.Expr, tau: sp.Expr) -> sp.Expr:
     Source: JSBSim FGRotor.cpp (Glauert equilibrium + SH79 blade-element C_T, GE49 time
     constant); Gaonkar & Peters dynamic-inflow literature.
     """
-    return (nu_eq - nu) / tau
+    return sp.sympify((nu_eq - nu) / tau)
 
 
 #: Descent-regime boundaries in units of the hover induced velocity v_h. Between VRS onset

@@ -4,9 +4,9 @@ are polynomial (using the unit-norm substitution), numerically at machine precis
 import numpy as np
 import sympy as sp
 
+from properties.helpers import random_unit_quaternion, unit_subs
 from skyflow_dynamics.spec import quaternion as Q
 from skyflow_dynamics.spec.frames import hat
-from properties.helpers import random_unit_quaternion, unit_subs
 
 
 def _sym_quat(name):
@@ -95,7 +95,7 @@ def test_body_to_world_convention_numeric():
 def test_double_cover_numeric():
     rng = np.random.default_rng(7)
     q_syms = _sym_quat("q")
-    fn = sp.lambdify(list(q_syms), Q.rotation_matrix(q_syms))
+    fn = sp.lambdify(q_syms.flat(), Q.rotation_matrix(q_syms))
     for _ in range(20):
         q = random_unit_quaternion(rng)
         np.testing.assert_allclose(np.asarray(fn(*q), float),

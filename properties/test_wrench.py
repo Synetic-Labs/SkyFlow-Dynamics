@@ -5,10 +5,10 @@ Sign conventions here guard against the exact failure modes found in reference s
 import numpy as np
 import sympy as sp
 
-from skyflow_dynamics.spec import wrench
-from skyflow_dynamics.spec.symbols import param_symbols, state_symbols
-from skyflow_dynamics.spec.parameters import substitution
 from properties.helpers import flat_params, make_inputs, params_dict, statedot_fn
+from skyflow_dynamics.spec import wrench
+from skyflow_dynamics.spec.parameters import substitution
+from skyflow_dynamics.spec.symbols import param_symbols, state_symbols
 
 P4 = param_symbols(4)
 S4 = state_symbols(4)
@@ -20,7 +20,7 @@ def _wrench_fn(values):
     F, M = wrench.body_wrench(w, S4.W, va, P4)
     sub = substitution(P4, values)
     F, M = F.subs(sub), M.subs(sub)
-    args = (list(w), list(va), list(S4.W))
+    args = (w.flat(), va.flat(), S4.W.flat())
     return (sp.lambdify(args, F, modules="numpy"),
             sp.lambdify(args, M, modules="numpy"))
 
@@ -29,7 +29,7 @@ def _inertia_fn(values):
     w = sp.Matrix(sp.symbols("wb_1 wb_2 wb_3", real=True))
     Wd = sp.Matrix(sp.symbols("Wd_1:5", real=True))
     M = wrench.rotor_inertia_moment(w, S4.W, Wd, P4).subs(substitution(P4, values))
-    return sp.lambdify((list(w), list(S4.W), list(Wd)), M, modules="numpy")
+    return sp.lambdify((w.flat(), S4.W.flat(), Wd.flat()), M, modules="numpy")
 
 
 def test_hover_wrench_is_pure_vertical_thrust():
@@ -52,7 +52,7 @@ def test_thrust_moment_hand_computed():
     M = np.asarray(Mf([0, 0, 0], [0, 0, 0], list(W)), float).ravel()
     r = np.array(vals["rotor_pos"])
     T = np.array(ct2) * W**2
-    expected = sum(np.cross(r[i], [0, 0, T[i]]) for i in range(4))
+    expected = np.sum([np.cross(r[i], [0, 0, T[i]]) for i in range(4)], axis=0)
     # Yaw component additionally carries the reaction torques −sᵢ·cq2·Ω²:
     expected[2] += sum(-vals["spin"][i] * vals["cq2"][i] * W[i]**2 for i in range(4))
     np.testing.assert_allclose(M, expected, rtol=1e-12)

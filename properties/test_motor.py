@@ -11,8 +11,8 @@ def test_asymmetric_reduces_to_first_order():
     W = sp.Matrix([sp.Symbol("W", nonnegative=True)])
     Wc = sp.Matrix([sp.Symbol("Wc", nonnegative=True)])
     tau = sp.Symbol("tau", positive=True)
-    asym = motor.asymmetric_lag(W, Wc, 1 / tau, 0, 1 / tau, 0)[0]
-    first = motor.first_order_lag(W, Wc, tau)[0]
+    asym = motor.asymmetric_lag(W, Wc, 1 / tau, 0, 1 / tau, 0).flat()[0]
+    first = motor.first_order_lag(W, Wc, tau).flat()[0]
     # Identical branches collapse: the Piecewise must reduce to the first-order rate exactly.
     assert sp.simplify(asym - first) == 0
 
@@ -21,13 +21,13 @@ def test_exact_exp_solves_the_ode():
     # d/dt Ω(t) == (Ω_c − Ω(t))/τ  with Ω(0) = Ω₀ — exactness, not approximation.
     t = sp.Symbol("t", nonnegative=True)
     tau = sp.Symbol("tau", positive=True)
-    W0 = sp.Matrix([sp.Symbol("W0", nonnegative=True)])
-    Wc = sp.Matrix([sp.Symbol("Wc", nonnegative=True)])
-    Wt = motor.exact_exp_step(W0, Wc, t, tau)
-    residual = sp.diff(Wt[0], t) - (Wc[0] - Wt[0]) / tau
+    W0 = sp.Symbol("W0", nonnegative=True)
+    Wc = sp.Symbol("Wc", nonnegative=True)
+    Wt = motor.exact_exp_step(sp.Matrix([W0]), sp.Matrix([Wc]), t, tau).flat()[0]
+    residual = sp.diff(Wt, t) - (Wc - Wt) / tau
     assert sp.simplify(residual) == 0
-    assert sp.simplify(Wt[0].subs(t, 0) - W0[0]) == 0
-    assert sp.limit(Wt[0], t, sp.oo) == Wc[0]
+    assert sp.simplify(Wt.subs(t, 0) - W0) == 0
+    assert sp.limit(Wt, t, sp.oo) == Wc
 
 
 def test_exact_exp_euler_consistency():
@@ -78,12 +78,11 @@ def test_asymmetric_crazyflow_values():
     # identification unchanged; ka2/kd2 were converted by 60/2π — one factor per Ω-power
     # minus one, since Ω̇ rescales too): spin-up strictly faster than spin-down for the same
     # |Δ| at hover-scale speeds.
-    W = sp.Matrix([sp.Symbol("W")])
-    Wc = sp.Matrix([sp.Symbol("Wc")])
+    W, Wc = sp.Symbol("W"), sp.Symbol("Wc")
     ka1, ka2, kd1, kd2 = 13.996, 0.00011093, 5.9332, 0.00031951
-    expr = motor.asymmetric_lag(W, Wc, ka1, ka2, kd1, kd2)[0]
-    up = float(expr.subs({W[0]: 1500.0, Wc[0]: 2000.0}))
-    down = float(expr.subs({W[0]: 2000.0, Wc[0]: 1500.0}))
+    expr = motor.asymmetric_lag(sp.Matrix([W]), sp.Matrix([Wc]), ka1, ka2, kd1, kd2).flat()[0]
+    up = float(expr.subs({W: 1500.0, Wc: 2000.0}))
+    down = float(expr.subs({W: 2000.0, Wc: 1500.0}))
     assert up > 0 > down
     assert up > abs(down)
 
