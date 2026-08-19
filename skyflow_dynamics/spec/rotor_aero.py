@@ -286,3 +286,39 @@ def vertical_climb_drag(v_a: sp.Matrix, k_v2: sp.Expr | float) -> sp.Matrix:
     """
     _, _, vaz = v_a.flat()
     return sp.Matrix([0, 0, -k_v2 * vaz * sp.Abs(vaz)])
+
+
+def per_axis_quadratic_drag(v_a: sp.Matrix, k_Q: sp.Matrix) -> sp.Matrix:
+    """
+    Per-axis quadratic frame drag at the CoM (N):
+        F_k = −k_Q,k · v_a,k · |v_a,k|,     k ∈ {x, y, z}
+    ⚠ Norm convention: per-axis |v_k|·v_k, structurally different from parasitic_drag's
+    ‖v_a‖·v_a — do not mix identified coefficients (the two agree only on a single axis).
+    vertical_climb_drag is exactly the z-axis restriction of this term — enable one, not both.
+    agilib's ModelBodyDrag is this form with the physical packing k_Q,k = ½·ρ·c_k·A_k
+    (drag coefficient × frontal area); ⚠ the agilib reference adds the FORCE to the
+    acceleration slot without dividing by mass (finding F-19) — the golden vectors pin the
+    force expression, not the reference's acceleration.
+    Sources: SkyDreamer (z-axis, verified as vertical_climb_drag); agilicious agilib
+    model_body_drag.cpp (executed, all three axes).
+    """
+    vax, vay, vaz = v_a.flat()
+    kx, ky, kz = k_Q.flat()
+    return sp.Matrix([-kx * vax * sp.Abs(vax),
+                      -ky * vay * sp.Abs(vay),
+                      -kz * vaz * sp.Abs(vaz)])
+
+
+def cubic_drag(v_a: sp.Matrix, k_C: sp.Matrix) -> sp.Matrix:
+    """
+    Per-axis cubic frame drag at the CoM (N):
+        F_k = −k_C,k · v_a,k³,     k ∈ {x, y, z}
+    The cubic companion of linear_drag in the identified polynomial drag model of the
+    NeuroBEM baseline ("PolyFit"): F = −diag(c_L)·v_a − diag(k_C)·v_a³ + translational lift.
+    Smooth (odd polynomial, no |·|) — dissipative for k_C ≥ 0 axis-wise.
+    Sources: agilicious agilib model_lin_cub_drag.cpp (executed); NeuroBEM (arXiv:2106.08015)
+    PolyFit baseline, after Sun et al. lumped aerodynamic identification.
+    """
+    vax, vay, vaz = v_a.flat()
+    kx, ky, kz = k_C.flat()
+    return sp.Matrix([-kx * vax ** 3, -ky * vay ** 3, -kz * vaz ** 3])

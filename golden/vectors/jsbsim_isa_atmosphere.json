@@ -1,0 +1,141 @@
+{
+ "schema": 1,
+ "kind": "jsbsim_terms",
+ "name": "jsbsim_isa_atmosphere",
+ "terms": [
+  "isa_atmosphere"
+ ],
+ "tolerance": 0.0005,
+ "provenance": {
+  "generator": "golden/generate/gen_jsbsim.py",
+  "source": "JSBSim flight dynamics engine, official PyPI wheel (executed)",
+  "jsbsim_version": "1.3.1 May 17 2026 14:26:04",
+  "source_tag": "v1.3.1",
+  "date": "2026-08-18",
+  "rig": "forces/hold-down (position frozen, vehicle velocity zeroed); airspeed produced by steady wind; dt = 1/120 s",
+  "units_note": "exact conversions: ft=0.3048 m, lbf=4.4482216152605 N; slug*ft2->kg*m2 and ft*lbf->N*m factor 1.3558179483314003",
+  "notes": "FGStandardAtmosphere (USSA-1976): T/P/rho/a read from tied properties over an altitude grid, troposphere only. h_geopotential_m computed with JSBSim's geopotential conversion H = h*R_E/(R_E+h), R_E = 6356766 m / 0.3048; the conversion is asserted against the executed T(h) to 1e-6 K. Spec-side inputs are geopotential altitude in m; tolerance covers the gas-constant and P0 differences between USSA-1976 imperial constants and the spec's ICAO SI values (<= 1e-5 relative each)."
+ },
+ "cases": [
+  {
+   "h_geometric_ft": 0.0,
+   "h_geopotential_m": 0.0,
+   "expected": {
+    "T_K": 288.15,
+    "P_Pa": 101325.54470143815,
+    "rho_kg_m3": 1.2250099705696975,
+    "a_m_s": 340.29352035335023
+   }
+  },
+  {
+   "h_geometric_ft": 250.0,
+   "h_geopotential_m": 76.1990865842163,
+   "expected": {
+    "T_K": 287.65470593658296,
+    "P_Pa": 100413.48847041967,
+    "rho_kg_m3": 1.2160736330861805,
+    "a_m_s": 340.00093341963617
+   }
+  },
+  {
+   "h_geometric_ft": 1000.0,
+   "h_geopotential_m": 304.78538587300307,
+   "expected": {
+    "T_K": 286.1688949893473,
+    "P_Pa": 97717.25316578845,
+    "rho_kg_m3": 1.1895648537399939,
+    "a_m_s": 339.1217002082078
+   }
+  },
+  {
+   "h_geometric_ft": 2500.0,
+   "h_geopotential_m": 761.908668274839,
+   "expected": {
+    "T_K": 283.1975936500185,
+    "P_Pa": 92501.1169806481,
+    "rho_kg_m3": 1.1378806667287173,
+    "a_m_s": 337.3565502940443
+   }
+  },
+  {
+   "h_geometric_ft": 5000.0,
+   "h_geopotential_m": 1523.634716881426,
+   "expected": {
+    "T_K": 278.24637432788217,
+    "P_Pa": 84311.4564299839,
+    "rho_kg_m3": 1.0555926993243598,
+    "a_m_s": 334.3944991958728
+   }
+  },
+  {
+   "h_geometric_ft": 8000.0,
+   "h_geopotential_m": 2437.465009679513,
+   "expected": {
+    "T_K": 272.3064774172643,
+    "P_Pa": 75271.53255098354,
+    "rho_kg_m3": 0.962968512673087,
+    "a_m_s": 330.80598152954957
+   }
+  },
+  {
+   "h_geometric_ft": 12000.0,
+   "h_geopotential_m": 3655.4966750327767,
+   "expected": {
+    "T_K": 264.3892715825644,
+    "P_Pa": 64458.61558927061,
+    "rho_kg_m3": 0.8493299633350264,
+    "a_m_s": 325.96148060928607
+   }
+  },
+  {
+   "h_geometric_ft": 16000.0,
+   "h_geopotential_m": 4873.061472234814,
+   "expected": {
+    "T_K": 256.47510039085125,
+    "P_Pa": 54942.75386816622,
+    "rho_kg_m3": 0.7462846612076841,
+    "a_m_s": 321.0457845963493
+   }
+  },
+  {
+   "h_geometric_ft": 20000.0,
+   "h_geopotential_m": 6090.159669658088,
+   "expected": {
+    "T_K": 248.56396209769653,
+    "P_Pa": 46600.78484311568,
+    "rho_kg_m3": 0.6531220835311763,
+    "a_m_s": 316.05557045075585
+   }
+  },
+  {
+   "h_geometric_ft": 25000.0,
+   "h_geopotential_m": 7610.876669014105,
+   "expected": {
+    "T_K": 238.67930158952498,
+    "P_Pa": 37650.13001612145,
+    "rho_kg_m3": 0.5495295138613128,
+    "a_m_s": 309.707517339543
+   }
+  },
+  {
+   "h_geometric_ft": 30000.0,
+   "h_geopotential_m": 9130.865548523307,
+   "expected": {
+    "T_K": 228.7993738603563,
+    "P_Pa": 30148.703924740217,
+    "rho_kg_m3": 0.4590427319165491,
+    "a_m_s": 303.22973296822386
+   }
+  },
+  {
+   "h_geometric_ft": 35000.0,
+   "h_geopotential_m": 10650.1268309966,
+   "expected": {
+    "T_K": 218.9241755119269,
+    "P_Pa": 23908.91593656206,
+    "rho_kg_m3": 0.38045689798075183,
+    "a_m_s": 296.61371550444795
+   }
+  }
+ ]
+}

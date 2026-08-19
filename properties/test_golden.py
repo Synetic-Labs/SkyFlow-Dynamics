@@ -16,11 +16,16 @@ from properties.helpers import N, flat_params, statedot_fn
 from skyflow_dynamics.spec.discretization import rk4_step
 
 VECTOR_DIR = pathlib.Path(__file__).resolve().parent.parent / "golden" / "vectors"
-FILES = sorted(VECTOR_DIR.glob("*.json"))
 
 
 def _load(path):
     return json.loads(path.read_text())
+
+
+#: Full-statedot/step vector kinds owned by this module; term-level vectors
+#: (kind == "jsbsim_terms") are consumed by test_golden_jsbsim.py.
+KINDS = ("statedot", "step_ode", "step_exact_exp")
+FILES = [p for p in sorted(VECTOR_DIR.glob("*.json")) if _load(p)["kind"] in KINDS]
 
 
 def _flat_state(c):

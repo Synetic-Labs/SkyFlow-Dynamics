@@ -98,14 +98,14 @@ Supply voltage → achievable Ω_max (linear map); slow drift over discharge.
 - **Tests:** `properties/test_motor.py`
 - **Notes:** Battery state evolution (SoC, sag dynamics) is harness-side.
 
-### `dc_motor_quasistatic` — *candidate*
+### `dc_motor_quasistatic` — **verified**
 
 J_r·Ω̇ = (K_q/R_a)(V_m − K_e·Ω) − k_m·Ω² − b·Ω; τ_m bridge via linearization.
 
 - **Defined in:** `spec.motor_electrical.dc_motor_speed_dynamics`
-- **Sources:** Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** τ_m = J_r/(K_qK_e/R_a + b + 2k_mΩ₀) connects to the verified first-order lag.
+- **Sources:** Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** τ_m = J_r/(K_qK_e/R_a + b + 2k_mΩ₀) connects to the verified first-order lag. Verified 2026-08-18 against executed JSBSim FGBrushLessDCMotor + FGPropeller (golden/vectors/jsbsim_prop_bldc.json): static spin-ups at three throttles, Euler-replayed through the reference's own discretization at 1e-7, with K_q = K_e = 60/(2πKv) (Drela) and k_m = C_P(0)ρD⁵/(8π³) from the APC table. The b·Ω viscous term and the I0 friction deadband are unexercised (b = 0, I0 = 0 in the rig; the deadband is not a spec term).
 
 ### `esc_battery_coupling` — *candidate*
 
@@ -201,9 +201,9 @@ M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k
 
 - **Defined in:** `spec.rotor_aero.translational_lift`
 - **Parameters:** `k_h`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions
-- **Tests:** `properties/test_golden.py`
-- **Notes:** Small-airspeed linearization of the AoA/advance-ratio model — mutually exclusive with k_angle/k_hor (validation rule).
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Tests:** `properties/test_golden.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Also executed as agilib ModelLinCubDrag's induced_lift_coeff (2026-08-19). Small-airspeed linearization of the AoA/advance-ratio model — mutually exclusive with k_angle/k_hor (validation rule).
 
 ### `aoa_advance_ratio_thrust` — **verified**
 
@@ -251,41 +251,41 @@ Per-rotor additive increment ΔT = T·G·(R/4z)² (linearized CB, identified G).
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** G = 11.37 identified for CF2 (fountain amplification folded in); needs height clip.
 
-### `momentum_induced_velocity` — *candidate*
+### `momentum_induced_velocity` — **verified**
 
 Actuator-disk induced velocity: hover v_h = √(T/2ρA); sign-safe axial closed form.
 
 - **Defined in:** `spec.inflow.hover_induced_velocity, spec.inflow.induced_velocity_axial`
-- **Sources:** McCormick — Aerodynamics, Aeronautics, and Flight Mechanics, 1st ed. (momentum-theory induced velocity, Eq. 6.15); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028; Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733)
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** The physical input behind ground effect / downwash / climb corrections.
+- **Sources:** McCormick — Aerodynamics, Aeronautics, and Flight Mechanics, 1st ed. (momentum-theory induced velocity, Eq. 6.15); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py); Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** The physical input behind ground effect / downwash / climb corrections. Verified 2026-08-18 against executed JSBSim FGPropeller (golden/vectors/jsbsim_prop_bldc.json): hover form at V_a = 0 and axial form at V_a up to 18 m/s. V_a < 0 (descent/reverse-flow branch) unexercised.
 
-### `oblique_momentum_thrust` — *candidate*
+### `oblique_momentum_thrust` — **verified**
 
 Nonlinear T(airspeed): T = 2ρA·v_i·U, U = √(Vx²+Vy²+(v_i−Vz)²) (implicit v_i).
 
 - **Defined in:** `spec.inflow.oblique_momentum_thrust`
-- **Sources:** Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733)
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** Principled model the identified k_v2/k_angle/k_hor terms linearize. VRS validity band excluded (descent 0.5–2 v_h; spec.inflow VRS constants).
+- **Sources:** Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733); Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Principled model the identified k_v2/k_angle/k_hor terms linearize. VRS validity band excluded (descent 0.5–2 v_h; spec.inflow VRS constants). Verified 2026-08-19: executed verbatim as agilib's ThrustFunction momentum side (NeuroBEM eq. 5) and pinned via the BEM closure vectors — the implicit-v_i root regime; explicit T(v_i) evaluation is the same expression.
 
-### `dynamic_inflow_lag` — *candidate*
+### `dynamic_inflow_lag` — **verified**
 
 First-order induced-inflow lag to Glauert equilibrium, τ ≈ 16/(γΩ); exact-exp step.
 
 - **Defined in:** `spec.inflow.dynamic_inflow_lag`
-- **Sources:** JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** Same operator-split pattern as the verified motor exact-exp discretization.
+- **Sources:** JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** Same operator-split pattern as the verified motor exact-exp discretization. Verified 2026-08-18 against executed JSBSim FGRotor (golden/vectors/jsbsim_rotor_inflow.json): the recorded ν sequences satisfy the exact-exp step to 1e-10 across hover/axial/edgewise/oblique conditions; ν_eq is the Glauert equilibrium with the reference's Bailey C_T (transcribed, self-checked at 1e-12 in the generator — the Bailey closed form itself is not a spec term).
 
-### `advance_ratio_tables` — *candidate*
+### `advance_ratio_tables` — **verified**
 
 T = C_T(J)·ρ·n²·D⁴, P = C_P(J)·ρ·n³·D⁵ with measured tables; windmilling via sign.
 
 - **Defined in:** `spec.atmosphere.advance_ratio, spec.atmosphere.propeller_thrust`
-- **Sources:** JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028; Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** Generalizes the polynomial T(Ω) (a fixed-J slice). J uses axial inflow only; UIUC/APC databases supply tables for small UAV props. NeuroBEM's BEM model is the higher-fidelity per-element variant.
+- **Sources:** JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py); Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** Generalizes the polynomial T(Ω) (a fixed-J slice). J uses axial inflow only; UIUC/APC databases supply tables for small UAV props. NeuroBEM's BEM model is the higher-fidelity per-element variant. Verified 2026-08-18 against executed JSBSim FGPropeller with the wheel's APC 9x4.5E tables (golden/vectors/jsbsim_prop_bldc.json): J and T pinned per step over J up to 0.42; the P form is exercised through the shaft-ODE load. Windmilling (J < 0 / C_T < 0) unexercised — the shipped table domain is J ≥ 0.
 
 ### `rolling_moment` — *candidate*
 
@@ -310,27 +310,63 @@ Kai Eq. (10) flapping force incl. spin-signed lateral and body-rate damping term
 Rotor roll/pitch damping moment −k_flap_w·Ω·Π_ẑ·ω (tip-path plane lags body rate).
 
 - **Defined in:** `spec.rotor_aero.flapping_moment_body_rate`
-- **Sources:** Shaughnessy, Deaux, Yenni — Development and Validation of a Piloted Simulation of a Helicopter and External Sling Load, NASA TP-1285, 1979 (JSBSim FGRotor's model basis); body-rate flap terms per Amer, NACA TN-2136, 1950; JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028; Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
+- **Sources:** Shaughnessy, Deaux, Yenni — Development and Validation of a Piloted Simulation of a Helicopter and External Sling Load, NASA TP-1285, 1979 (JSBSim FGRotor's model basis); body-rate flap terms per Amer, NACA TN-2136, 1950; JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py); Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** Spin-sign-free: adds (not cancels) pairwise — a net damping derivative. Kai Eq. (7) carries the same hub moment with √T scaling; JSBSim derives it from flap angles + hinge-offset hub moments.
 
-### `bramwell_rotor_torque` — *candidate*
+### `bramwell_rotor_torque` — **verified**
 
 Q = ρbcδ(ΩR)²R²(1+4.5μ²)/8 − (Tλ+Hμ)R: profile + induced/climb torque vs flight state.
 
 - **Defined in:** `spec.rotor_aero.bramwell_torque, spec.rotor_aero.blade_profile_drag`
-- **Sources:** Bramwell — Helicopter Dynamics, 2nd ed., eqns 3.43-3.44 (rotor torque decomposition: profile + induced/climb components); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** The flight-condition dependence (yaw authority and power rise with μ, fall in descent) that the verified torque polynomial — its fixed-condition slice — lacks. Needs λ, μ: adopt together with dynamic_inflow_lag.
+- **Sources:** Bramwell — Helicopter Dynamics, 2nd ed., eqns 3.43-3.44 (rotor torque decomposition: profile + induced/climb components); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** The flight-condition dependence (yaw authority and power rise with μ, fall in descent) that the verified torque polynomial — its fixed-condition slice — lacks. Needs λ, μ: adopt together with dynamic_inflow_lag. Verified 2026-08-18 against executed JSBSim FGRotor (golden/vectors/jsbsim_rotor_inflow.json): torque identity with the δ = 0.009 + 0.3(6C_T/(aσ))² polar at 1e-7 incl. edgewise μ ≈ 0.07 (the (1+4.5μ²) term is live). H from zero-body-rate flapping; body-rate flapping contributions to H unexercised (rig holds rates at 0).
 
 ### `ground_effect_talbot_inflow` — *candidate*
 
 IGE inflow factor v_i ← (1 − load·e^{−k_ge(h+h₀)})·v_i, exponential in height.
 
 - **Defined in:** `spec.ground_effect.talbot_inflow_factor`
-- **Sources:** Talbot & Corliss — A Mathematical Force and Moment Model of a UH-1H Helicopter for Flight Dynamics Simulations, NASA TM-73,254, 1977 (eqn 10a ground-effect inflow factor); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
+- **Sources:** Talbot & Corliss — A Mathematical Force and Moment Model of a UH-1H Helicopter for Flight Dynamics Simulations, NASA TM-73,254, 1977 (eqn 10a ground-effect inflow factor); JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py)
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** Acts on induced velocity (composes with dynamic_inflow_lag); the thrust-ratio family (cheeseman_bennett, sanchez_cuevas, pybullet) acts on T directly — use one route, never both.
+
+### `bem_blade_element_loads` — **verified**
+
+BEM disk-load integrands dT/dQ/dH: sinusoidal stall-capable polars cl=cl0·(sinα·cosα+ε_c), cd=cd0·sin²α over U_T=Ωr+v_hor·sinψ, U_P=(v_ver−v_i)−….
+
+- **Defined in:** `spec.bem.blade_element_integrands, spec.bem.blade_section_velocities, spec.bem.inflow_angle, spec.bem.section_aoa, spec.bem.lift_coefficient, spec.bem.drag_coefficient, spec.bem.chord`
+- **Sources:** Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); Gill & D'Andrea — Propeller Thrust and Drag in Forward Flight, IEEE CCTA 2017 (sinusoidal high-incidence lift/drag polars; with Ducard & Hua, CCA 2014)
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib (golden/vectors/agilicious_bem.json): T/Q/H disk integrals reproduced at the recorded induced velocity across hover, forward flight to 18 m/s, climb, and descent; the pure-spec exact-atan2 form deviates <=2.3% from the reference's float32 atan2 (finding F-22, bounded in the test). Nonzero flapping inside the integrands unexercised (the reference zeroes it while integrating). Valid at any incidence/advance ratio (unlike the small-angle verified-tier rotor terms); smooth throughout. Camber offset ε_c = 0.07 and the H-force correction 3.0 are executed-code identifications absent from the paper. ⚠ paper eq. (7) prints +v_ver·β·cosψ where the code has −v_ver·β·cosψ (inert: flapping zeroed during integration; code form adopted). Reference quadrature: single 15-point Gauss-Kronrod per axis (generator/consumer detail, not spec).
+
+### `bem_momentum_inflow_closure` — **verified**
+
+Induced velocity as root of T_BEM(v_i) = 2ρA·v_i·√(v_hor²+(v_ver−v_i)²).
+
+- **Defined in:** `spec.bem.momentum_closure_residual`
+- **Sources:** Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib: the recorded Brent roots satisfy the residual within solver tolerance in 11/12 cases; in deep descent (25 m/s) the residual provably has NO root in the solver range and the reference silently returns range-max 30 m/s (finding F-21) — pinned as such. Momentum side IS spec.inflow.oblique_momentum_thrust with V=(v_hor,0,v_ver). Reference solves by warm-started vectorized Brent (tol 1e-3); differentiable backends: fixed smooth iterations, or v_i from dynamic_inflow_lag state (in-ODE).
+
+### `vrs_empirical_inflow` — **verified**
+
+Vortex-ring-state induced velocity: ṽ_i = v_h·(1+1.125x−1.372x²+1.718x³−0.655x⁴), x = v_ver/v_h, gated on v_ver/v_i ∈ (0.01, 2).
+
+- **Defined in:** `spec.bem.vrs_induced_velocity`
+- **Sources:** Hoffmann, Huang, Waslander, Tomlin — Quadrotor Helicopter Flight Dynamics and Control: Theory and Experiment, AIAA GNC 2007 (VRS empirical quartic; hinged-blade spring model); Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib: quartic + executed blend replayed exactly on 6 gated cases (shallow/deep/oblique/fast descent, mixed-regime ANY-gate) and 6 ungated. Fills the descent band where momentum theory fails (spec.inflow VRS constants). Blend variants differ: paper max(ṽ_i, v_h); executed agilib max(v_i^mom, ṽ_i) then clamp ≤ 2·v_h — and its gate fires on ANY-rotor predicates (finding F-20). Non-smooth (gate + max/min): document surrogate before differentiating through.
+
+### `bem_tpp_wrench` — **verified**
+
+Per-rotor force/torque from tip-path-plane tilt: f = Rz(χ)·(−(H+T·sin a1), s·T·sin b1, T·cos a0); τ = Rz(χ)·(−s·k_β·b1, −k_β·a1, −s·Q) + r×f.
+
+- **Defined in:** `spec.bem.tpp_rotor_force, spec.bem.tpp_rotor_torque`
+- **Sources:** Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); Hoffmann, Huang, Waslander, Tomlin — Quadrotor Helicopter Flight Dynamics and Control: Theory and Experiment, AIAA GNC 2007 (VRS empirical quartic; hinged-blade spring model)
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib: composition replayed from recorded (T, Q, H, a0, a1, b1) through to the executed acceleration/omega-dot contributions (live flapping angles in all 12 cases, spring moments, 0.9575 z-obstruction). χ = atan2(v_y, v_x) aligns H with the in-plane hub velocity (drag, rearward); hinge-spring moments k_β per Hoffmann's hinged-blade model. Flapping angles (a0, a1, b1) are INPUTS: the reference's machine-generated vehicle-specific rational fits are rejected (REFERENCES.md) — general closures per Prouty pp. 463 remain future work. Reduces to (0,0,T) / −s·Q·ẑ at zero flapping and H. The executed reference also scales the collective z-force by 0.9575 (frame obstruction) — an assembly-level identified constant.
 
 
 ## Frame aerodynamics
@@ -341,8 +377,8 @@ Lumped linear body-frame drag F = −diag(c_L)·v_a (Faessler differential-flatn
 
 - **Defined in:** `spec.rotor_aero.linear_drag`
 - **Parameters:** `c_L`
-- **Sources:** Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, IEEE RA-L 2018; Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml
-- **Tests:** `properties/test_energy.py`, `properties/test_golden.py`
+- **Sources:** Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, IEEE RA-L 2018; Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Tests:** `properties/test_energy.py`, `properties/test_golden.py`, `properties/test_golden_agilicious.py`
 - **Notes:** Ω-independent lumping of the per-rotor H-force; identify against c_L OR k_d, not both. Crazyflow stores the negated diagonal (drag_matrix = −diag(c_L)).
 
 ### `parasitic_drag` — **verified**
@@ -354,6 +390,24 @@ D = −‖v_a‖·diag(c_D)·v_a at CoM.
 - **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions
 - **Tests:** `properties/test_energy.py`, `properties/test_golden.py`
 - **Notes:** ⚠ ‖v‖-scaled, NOT per-axis |v_k|·v_k (SkyDreamer's form) — structurally different; don't transplant coefficients between the two.
+
+### `per_axis_quadratic_drag` — **verified**
+
+F_k = −k_Q,k·v_a,k·|v_a,k| per body axis (k_Q = ½ρ·c_k·A_k physical packing).
+
+- **Defined in:** `spec.rotor_aero.per_axis_quadratic_drag`
+- **Sources:** Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib ModelBodyDrag (golden/vectors/agilicious_simple_models.json). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — don't mix coefficients. vertical_climb_drag is its z-restriction: enable one, not both. ⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without dividing by mass (finding F-19); vectors pin the force expression.
+
+### `cubic_axis_drag` — **verified**
+
+F_k = −k_C,k·v_a,k³ per body axis — cubic companion of linear_drag (PolyFit model).
+
+- **Defined in:** `spec.rotor_aero.cubic_drag`
+- **Sources:** Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib ModelLinCubDrag. The NeuroBEM 'PolyFit' baseline is linear_drag + this + translational_lift (agilib ModelLinCubDragIndLift, induced_lift_coeff ≡ k_h). Smooth odd polynomial.
 
 
 ## Disturbances & interaction
@@ -418,6 +472,15 @@ Classical RK4; the differentiable reference integrator (adaptive solvers are not
 - **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
 
+### `semi_implicit_euler` — **verified**
+
+Symplectic (semi-implicit) Euler: velocities first with f(s), then positions with f evaluated at the velocity-updated state.
+
+- **Defined in:** `spec.discretization.semi_implicit_euler_step`
+- **Sources:** Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib IntegratorSymplecticEuler. NeuroBEM's evaluation integrator (1 ms steps, §IV-D): first-order like explicit Euler but symplectic on the mechanical part — bounded energy error instead of drift. agilib groups (v, ω, Ω) as velocities and (x, q) as positions; the quaternion advances with the NEW ω against the OLD q. Single smooth composition, cleanly differentiable.
+
 ### `quaternion_norm_correction` — *candidate*
 
 q̇ = ½ q ⊗ (0, ω) + K·(1−‖q‖²)·q — smooth Lagrange-style norm stabilization.
@@ -441,14 +504,14 @@ Point mass + kinematic attitude; surrogate Jacobian for BPTT via straight-throug
 
 ## Environment (atmosphere / turbulence)
 
-### `isa_atmosphere` — *candidate*
+### `isa_atmosphere` — **verified**
 
 USSA-1976 layered T(h), P(h); ρ = P/RT; thrust/torque scale linearly with ρ.
 
 - **Defined in:** `spec.atmosphere.temperature_troposphere, spec.atmosphere.pressure_gradient_layer, spec.atmosphere.density, spec.atmosphere.speed_of_sound`
-- **Sources:** US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), ideal-gas density; JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028
-- **Tests:** `properties/test_candidates.py`
-- **Notes:** Verified-tier coefficients absorb ρ at identification altitude — scale by ρ/ρ_ident.
+- **Sources:** US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), ideal-gas density; JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** Verified-tier coefficients absorb ρ at identification altitude — scale by ρ/ρ_ident. Verified 2026-08-18 against executed JSBSim FGStandardAtmosphere (golden/vectors/jsbsim_isa_atmosphere.json): T/P/ρ/a at 12 altitudes to 35 kft, 5e-4 relative (imperial-vs-ICAO constant sets); inputs are geopotential altitude. Stratosphere (isothermal layer) unexercised.
 
 ### `dryden_turbulence` — **verified**
 
@@ -456,8 +519,8 @@ Dryden forming filters H_u/H_v/H_w + low-altitude scale/intensity closures.
 
 - **Defined in:** `spec.wind.dryden_filter_u, spec.wind.dryden_filter_vw, spec.wind.dryden_low_altitude_scales`
 - **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust; Yeager — Implementation and Testing of Turbulence Models for the F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source (sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run statistics
-- **Tests:** `properties/test_candidates.py`, `properties/test_dryden_authenticity.py`
-- **Notes:** ⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs 1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET. Verified via the ARCHAIC-SOURCE EXCEPTION (2026-08-11): the golden data are NASA CR-1998-206937's published run statistics (pinned PDF, transcribed tables + listing), not vectors from executed code — the reference is ACSL (no runnable interpreter) with an irreproducible RNG. Proven: the report's Tustin difference equations are exactly the prewarped bilinear of these filters, and re-simulating them reproduces Tables 2-7 calibration (σ, u/v/w) within the published spread at L = 1750 ft, V ∈ {100, 1000} ft/s. The low-altitude closures are NOT exercised by those runs and remain literature-tier.
+- **Tests:** `properties/test_candidates.py`, `properties/test_dryden_authenticity.py`, `properties/test_golden_jsbsim.py`
+- **Notes:** ⚠ discrete driving noise must be N(0, π/dt) for the published gains; 8785C vs 1797 length-scale factor-of-2 trap. Low-altitude fit is in FEET. Verified via the ARCHAIC-SOURCE EXCEPTION (2026-08-11): the golden data are NASA CR-1998-206937's published run statistics (pinned PDF, transcribed tables + listing), not vectors from executed code — the reference is ACSL (no runnable interpreter) with an irreproducible RNG. Proven: the report's Tustin difference equations are exactly the prewarped bilinear of these filters, and re-simulating them reproduces Tables 2-7 calibration (σ, u/v/w) within the published spread at L = 1750 ft, V ∈ {100, 1000} ft/s. UPGRADE 2026-08-18: the low-altitude closures (L(h), σ(h, W20), h < 1000 ft) are now ALSO pinned by executed-code vectors — JSBSim FGWinds ttTustin implements the same CR-206937 difference equations with the closures active, and its seeded runs are reproduced sample-exactly via recovered driving noise (golden/vectors/jsbsim_dryden_lowalt.json).
 
 ### `von_karman_turbulence` — *candidate*
 
@@ -523,7 +586,7 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **graf**: Graf — Quaternions and Dynamics (quaternion kinematics)
 - **eschmann2024**: Eschmann et al. — Data-Driven System Identification of Quadrotors Subject to Motor Delays, 2024 (arXiv:2404.07837)
 - **faessler2018**: Faessler, Franchi, Scaramuzza — Differential Flatness of Quadrotor Dynamics Subject to Rotor Drag for Accurate Tracking of High-Speed Trajectories, IEEE RA-L 2018
-- **jsbsim**: JSBSim flight dynamics engine (FGPropeller, FGRotor, FGStandardAtmosphere), commit 9a0b028 — <https://github.com/JSBSim-Team/jsbsim>
+- **jsbsim**: JSBSim flight dynamics engine (FGPropeller, FGRotor, FGBrushLessDCMotor, FGStandardAtmosphere, FGWinds); evaluated at commit 9a0b028; golden vectors from the EXECUTED official PyPI wheel v1.3.1 (golden/generate/gen_jsbsim.py) — <https://github.com/JSBSim-Team/jsbsim>
 - **mccormick**: McCormick — Aerodynamics, Aeronautics, and Flight Mechanics, 1st ed. (momentum-theory induced velocity, Eq. 6.15)
 - **sh79**: Shaughnessy, Deaux, Yenni — Development and Validation of a Piloted Simulation of a Helicopter and External Sling Load, NASA TP-1285, 1979 (JSBSim FGRotor's model basis); body-rate flap terms per Amer, NACA TN-2136, 1950
 - **bramwell**: Bramwell — Helicopter Dynamics, 2nd ed., eqns 3.43-3.44 (rotor torque decomposition: profile + induced/climb components)
@@ -540,7 +603,10 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **gazebo_battery**: gazebosim/gz-sim LinearBatteryPlugin.cc (linear OCV + internal resistance + current low-pass) — <https://github.com/gazebosim/gz-sim>
 - **mil8785c**: MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust
 - **ussa1976**: US Standard Atmosphere 1976 (NASA-TM-X-74335): layered T(h), P(h), ideal-gas density
-- **neurobem**: Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (Agilicious high-fidelity BEM option)
+- **neurobem**: Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza — NeuroBEM: Hybrid Aerodynamic Quadrotor Model, RSS 2021 (arXiv:2106.08015); BEM component eqs. (5)-(19), Kingfisher platform §IV-B — <https://arxiv.org/abs/2106.08015>
+- **agilicious**: Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py) — <https://github.com/alibabasomeone/agilicious_internal_mine>
+- **hoffmann2007**: Hoffmann, Huang, Waslander, Tomlin — Quadrotor Helicopter Flight Dynamics and Control: Theory and Experiment, AIAA GNC 2007 (VRS empirical quartic; hinged-blade spring model)
+- **gill2017**: Gill & D'Andrea — Propeller Thrust and Drag in Forward Flight, IEEE CCTA 2017 (sinusoidal high-incidence lift/drag polars; with Ducard & Hua, CCA 2014)
 - **mathworks_aeroblks**: MathWorks Aerospace Blockset documentation — block-equation pages only (implementations are proprietary and were not consulted); each block cites the public standard it implements — <https://www.mathworks.com/help/aeroblks/>
 - **cr206937**: Yeager — Implementation and Testing of Turbulence Models for the F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source (sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run statistics — <https://ntrs.nasa.gov/citations/19980028448>
 

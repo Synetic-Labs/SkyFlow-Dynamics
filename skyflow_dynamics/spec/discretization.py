@@ -37,3 +37,29 @@ def rk4_step(f, s, h, t0=0):
     k3 = f(t0 + h / 2, s + (h / 2) * k2)
     k4 = f(t0 + h, s + h * k3)
     return s + (h / 6) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+
+def semi_implicit_euler_step(f, s, h, vel_idx, pos_idx, t0=0):
+    """
+    One semi-implicit (symplectic) Euler step, split into a velocity group (v, ω, Ω — the
+    slots whose derivatives are forces/accelerations) and a position group (x, q — the slots
+    whose derivatives are velocities):
+
+        s¹ = s  with  s¹[vel] = s[vel] + h·f(t₀, s)[vel]        (velocities first)
+        s⁺ = s¹ with  s⁺[pos] = s[pos] + h·f(t₀+h, s¹)[pos]      (positions with NEW velocities)
+
+    First-order accurate like explicit Euler, but the position update uses the updated
+    velocities, which preserves the symplectic structure on the mechanical (x, v) part —
+    the energy of the discrete trajectory stays bounded instead of drifting. This is the
+    integration scheme NeuroBEM's evaluation uses (1 ms steps) and agilib implements;
+    note the quaternion slot is advanced with the NEW ω but the OLD q (q̇ = ½·q ⊗ (0, ω⁺)).
+
+    `vel_idx`/`pos_idx` are index arrays (or slices) into the flat state. Generic over the
+    numeric type of s (numpy, jax). Source: agilib integrator_symplectic_euler.cpp
+    (executed); NeuroBEM (arXiv:2106.08015) §IV-D.
+    """
+    s1 = s.copy()
+    s1[vel_idx] = s[vel_idx] + h * f(t0, s)[vel_idx]
+    s2 = s1.copy()
+    s2[pos_idx] = s[pos_idx] + h * f(t0 + h, s1)[pos_idx]
+    return s2

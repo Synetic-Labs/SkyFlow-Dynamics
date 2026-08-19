@@ -142,6 +142,41 @@ JSBSim (master @ commit 9a0b028, all files read locally after fetching from raw.
 - **Relevance:** rotorpy already computes per-rotor local airflow with the w x r lever arm for its H-force model. Identical physics.
 - **Notes:** JSBSim additionally feeds turbulence into the per-rotor local velocity (AeroUVW/AeroPQR include wind + turbulence) — worth confirming rotorpy's Dryden wind enters the per-rotor terms, not just the bulk drag.
 
+### FGWinds addendum (2026-08-17): the winds/turbulence subsystem was not inventoried in the sweep above
+
+The 2026-08-10 JSBSim findings cover propulsion + atmosphere only. src/models/atmosphere/FGWinds.cpp (master, 639 lines, read verbatim 2026-08-17) holds four more models, evaluated below.
+
+### FGWinds ttMilspec/ttTustin turbulence: runnable, seedable implementation of NASA CR-1998-206937 — models already covered; **flagged as golden-source opportunity**
+
+- **Equations:** ttTustin implements Yeager's Tustin difference equations verbatim (code comments cite eqs 18–26): xi_u update with C_BL = 1/(tau_u·tan(T_V/2·tau_u)) prewarping, second-order v/w forms, plus angular-rate gust filters p/q/r (sig_p = 1.9·sig_w/sqrt(L_w·b_w), tau_q = 4·b_w/(pi·V), tau_r = 3·b_w/(pi·V), Yeager eqs 8–26). ttMilspec implements the MIL-STD-1797A first-order forms (eqs 30–35). Driving noise: nu ~ N(0,1) per step from a dedicated, seedable RNG (FGWinds::SetRandomSeed, lines 492–496). Low-altitude closures ARE implemented and active for h ≤ 1000 ft (lines 277–281): L_u = h/(0.177+0.000823h)^1.2, L_w = h, sig_w = 0.1·W20, sig_u = sig_w/(0.177+0.000823h)^0.4 (h in ft). 1000–2000 ft: linear blend into a probability-of-exceedance sigma table (POE_Table, lines 99–107); h > 2000 ft: L = 1750 ft, sigma from POE table. Height clipped at 10 ft; u/v components rotated by wind azimuth psiw; V (true airspeed) is a divisor — turbulence disabled at V = 0.
+- **Source:** JSBSim master, src/models/atmosphere/FGWinds.cpp lines 204–385 (Turbulence), 492–503 (seedable RNG); code comments cite "Yeager1998" = NASA CR-1998-206937, the same pinned report used for the spec's Dryden verification.
+- **Parameters:** turb-type property selects ttMilspec/ttTustin; severity via probability_of_exceedence_index (1–7) and windspeed_at_20ft; wingspan b_w (defaults to 30 ft if 0) enters only the angular-rate filters.
+- **Relevance:** The filter math is already covered (dryden_turbulence, verified; the registry's CR-206937 equivalence proof covers exactly these difference equations). The NEW value is executability: the spec's Dryden term is verified via the ARCHAIC-SOURCE EXCEPTION (published run statistics, no runnable reference), and its low-altitude closures are explicitly "NOT exercised, literature-tier". JSBSim is pip-installable with Python bindings and a seedable turbulence RNG — a gen_jsbsim.py golden generator running ttTustin at h ≤ 1000 ft would exercise the low-altitude closures with executed code and could upgrade the Dryden verification from statistics-based to vector-based. Angular-rate gust filters were previously skipped by choice (wingspan-parameterized, aircraft-scale) — now known runnable if ever revisited.
+- **Notes:** Traps for a future generator: units are ft/s and ft throughout; frames are NED with azimuth rotation; the v-filter reuses L_u and sig_u (8785C low-altitude convention sig_v = sig_u, L_v = L_u — consistent, but the code comment admits omega_v "is defined nowhere"); the Tustin gains embed the noise calibration (nu ~ N(0,1), not N(0, pi/dt) — the sqrt(2·tau/T_V) factors in the difference equations carry the scaling).
+
+### FGWinds three-segment 1-cosine gust — already covered (minor generalization)
+
+- **Equations:** factor(t): (1−cos(pi·t/t_up))/2 ramp-up, hold at 1 for t_steady, mirrored cosine ramp-down over t_down; gust vector = factor · magnitude · unit direction, direction specifiable in body/wind/local frame, transformed once at onset (lines 389–445).
+- **Relevance:** The adopted MIL-F-8785C 1-cosine gust (time-parameterized hover adaptation) covers this; JSBSim adds only the ramp-down segment and frame selection. Time-based parameterization matches the spec's hover adaptation — a useful precedent, nothing new to adopt.
+
+### FGWinds ttCulp turbulence and up/downburst — rejected
+
+- **Equations:** ttCulp: sine wave + uniform-random spikes with hand-tuned constants (max_vs = 40 fps, spike decay 0.9, yaw components sin/cos(3·delta)) — game-style, no published provenance, dimensionally incoherent (lines 208–256). UpDownBurst(): computes a haversine distance and discards it — dead code (lines 478–485).
+- **Relevance:** Nothing to adopt. Negative result recorded so the next sweep skips them.
+
+### Promotion record (2026-08-18): six terms verified against the executed engine
+
+golden/generate/gen_jsbsim.py runs the official `jsbsim` PyPI wheel v1.3.1 (same C++ sources as the evaluated tree) on minimal custom testbeds — hold-down rig (freezes position, ZEROES vehicle velocity; airspeed produced by steady wind), custom aircraft with the wheel's own DJI_E305/DJI_9450 engine data and the ah1s rotor geometry under ExternalRPM. Vectors: jsbsim_isa_atmosphere, jsbsim_dryden_lowalt, jsbsim_prop_bldc, jsbsim_rotor_inflow (consumed by properties/test_golden_jsbsim.py). Promoted to **verified**: isa_atmosphere, momentum_induced_velocity, advance_ratio_tables, dc_motor_quasistatic, dynamic_inflow_lag, bramwell_rotor_torque; the dryden_turbulence low-altitude closures are now pinned by executed code (the FGWinds ttTustin seeded runs are reproduced sample-exactly via noise recovered from the recorded outputs — whiteness-checked). Per-term unexercised scopes are recorded in the registry notes (descent-branch v_i, windmilling J<0, b·Ω/I0-deadband, body-rate flapping in H, stratosphere). NOT promoted: ground_effect_talbot_inflow (the spec form deliberately diverges from JSBSim's per-step state rescale — see the verification finding above — so executed vectors cannot pin it; it stays candidate on Talbot provenance).
+
+Two reference quirks found by the generator's transcription self-checks, recorded as traps:
+
+- **F-7 (config-loader inertia constant):** JSBSim's XML unit table converts `KG*M2 → SLUG*FT2` with a ROUNDED constant 1.35594 (src/input_output/FGXMLElement.cpp:106) while torque/energy conversions use 1.35581795 — a 9.0e-5 relative inconsistency. A `<ixx unit="KG*M2">` prop therefore simulates with J_r = xml_value/1.35594 slug·ft²; diagnosed from a 9.0e-5 residual in the Euler shaft-update replay. Any cross-validation against JSBSim must fold this into parameter conversion (gen_jsbsim.py stores the executed-equivalent SI inertia).
+- **F-8 (BLDC torque constant):** FGBrushLessDCMotor converts W/RPM to ft·lbf with NMtoftpound = 1.3558 (rounded, FGBrushLessDCMotor.h:73) — a 1.3e-5 wart folded into the stored K_q.
+
+### Remaining JSBSim subsystems — skipped (out of scope for the math spec)
+
+- FGAerodynamics: table-driven per-aircraft aero coefficients — config data, no closed-form model to adopt. FGLGear/FGGroundReactions/FGSurface: ground-contact/gear forces — harness territory per the repo layout decision (contact is deliberately not in the spec). FGInertial: WGS-84 gravity + Earth-rotation terms — negligible at quadrotor scale. FGMSIS (NRLMSISE-00)/FGMars: exotic atmospheres, out of scope. FGBuoyantForces/FGGasCell: airship models. FGPropagate/FGAccelerations: integrator machinery, not physics terms.
+
 
 ## Ground effect & inter-vehicle downwash literature
 
@@ -393,6 +428,7 @@ Surveyed RotorS (source + firefly xacro), PX4 SITL gazebo-classic (source + head
 - **Parameters:** a = 1.3298e-06, b = 3.8361e-03, c = -1.769 (thrust in N vs Omega rad/s); motor tau = 0.05 s; omega_motor in [150, 2000] rad/s; kappa = 0.016 m.
 - **Relevance:** Flightmare's flightlib dynamics contain NO body drag, NO rotor drag, NO blade flapping, NO ground effect — strictly a subset of rotorpy's inventory (its thrust polynomial is exactly rotorpy's c0+c1*W+c2*W^2 form). Nothing to adopt.
 - **Notes:** The +/-6 rad/s body-rate clamp and thrust_min/max clamp are simulation guards, not physics. The parametric inertia heuristic could be a convenience default but is not a physics term.
+- **Re-verified 2026-08-17** at master HEAD d4218ae (full flightlib tree, all 54 .cpp/.hpp files, verbatim source): every value in this entry confirmed (thrust map, kappa, tau, clamps, inertia heuristic). Additional findings, all non-adoptable: (a) objects/quadrotor.cpp holds the harness layer — exact-exponential discretization of the first-order motor (same technique as spec/discretization), RK4 with dt_max = 2.5e-3 s, world-box position/velocity zeroing; (b) two harness quirks worth knowing if Flightmare is ever used as a comparison baseline: linear acceleration a = R(q)·[0,0,T/m] + g and body torque are computed once per sim_dt and held constant through the RK4 substeps (the quaternion-thrust coupling is not integrated inside the step), and the quaternion renormalization at quadrotor.cpp:67 normalizes the pre-step state immediately before it is overwritten by next_state — the integrated quaternion is never renormalized; (c) sensors/imu.cpp is an empty stub (no noise/bias model); rgb_camera is rendering-only; envs/ is RL reward code; pend_state/dynamic_gate are moving-gate scenery. No drag, wind, ground effect, flapping, or battery model anywhere in flightlib. Verdict unchanged: nothing to adopt — Flightmare's fidelity investment is photorealistic rendering (Unity), not dynamics.
 
 ### Agilicious simulator model pipeline (module inventory) — *skipped*
 
@@ -400,7 +436,7 @@ Surveyed RotorS (source + firefly xacro), PX4 SITL gazebo-classic (source + head
 - **Source:** agilicious readthedocs PDF (agilicious Release 0.0.1, Robotics and Perception Group UZH, Apr 2023), section 1.9 'Simulation' — module list quoted verbatim from docs; repo tree of uzh-rpg/agilicious confirmed docs-only (no agilib/ directory in public main branch).
 - **Parameters:** None public.
 - **Relevance:** Confirms the architecture; ModelLinCubDrag (per-axis linear + cubic velocity drag polynomial) is the only functional form not spanned exactly by rotorpy's linear + quadratic drag terms, but its exact equation and coefficients are not verifiable from public source, and a linear+quadratic pair already covers the same speed envelope for fitting.
-- **Notes:** If a linear+cubic drag form is ever wanted for MPC-consistency reasons, it is a trivial generalization of the existing drag polynomial; no credible published coefficients to import.
+- **Notes:** If a linear+cubic drag form is ever wanted for MPC-consistency reasons, it is a trivial generalization of the existing drag polynomial; no credible published coefficients to import. **SUPERSEDED 2026-08-19:** the agilib source became verifiable through a public GPLv3 mirror and the whole pipeline was executed — see "NeuroBEM / agilicious agilib (EXECUTED)" below. The claim "not publicly verifiable" no longer holds, and ModelLinCubDrag turned out to carry an induced-lift term this entry missed.
 
 ### BEM per-rotor propeller model (Agilicious high-fidelity option / NeuroBEM) — **ADOPTED (candidate tier)**
 
@@ -408,7 +444,7 @@ Surveyed RotorS (source + firefly xacro), PX4 SITL gazebo-classic (source + head
 - **Source:** Bauersfeld, Kaufmann, Foehn, Sun, Scaramuzza, 'NeuroBEM: Hybrid Aerodynamic Quadrotor Model', RSS 2021 (arXiv:2106.08015), Section III-D, equations 5-19 (extracted from the paper PDF); confirmed as Agilicious ModelPropellerBEM per agilicious docs section 1.9 and readme ('optionally provides aerodynamic BEM models as described in Bauersfeld RSS 21').
 - **Parameters:** Coefficients (c_l0, c_d0, theta0, theta1, chord, k_beta, e) are platform-specific thrust-stand fits; not published as plug-in defaults. Reported accuracy: >50% positional RMSE reduction in re-simulated trajectories vs state-of-the-art models.
 - **Relevance:** The single biggest gap vs rotorpy's inventory. rotorpy approximates the same physics with separate additive/multiplicative corrections (H-force, blade-flapping moment, translational lift, AoA thrust correction, k_v2 climb term); BEM unifies them self-consistently and adds two effects genuinely absent: (a) induced-velocity solution coupling thrust to inflow, (b) vortex-ring-state descent behavior (eq 18-19). For the planned JAX port the inner fixed-point solve for v_i is differentiable via implicit differentiation, and closed-form azimuth integrals of eqs 13-15 exist (standard helicopter results) so the double integral need not be evaluated numerically.
-- **Notes:** Adopt as an optional high-fidelity per-rotor model alongside the existing polynomial model, mirroring Agilicious's ModelRotorSimple / ModelRotorBEM toggle. The learned residual-network half of NeuroBEM (inputs: 20-sample / 2.5 ms history of linear+angular velocity and motor speeds, outputs f_res, tau_res) is data-driven, not first-principles — excluded from this recommendation.
+- **Notes:** Adopt as an optional high-fidelity per-rotor model alongside the existing polynomial model, mirroring Agilicious's ModelRotorSimple / ModelRotorBEM toggle. The learned residual-network half of NeuroBEM (inputs: 20-sample / 2.5 ms history of linear+angular velocity and motor speeds, outputs f_res, tau_res) is data-driven, not first-principles — excluded from this recommendation. **SUPERSEDED 2026-08-19:** landed and PROMOTED via the executed agilib code — see "NeuroBEM / agilicious agilib (EXECUTED)" below, which also records where the executed code deviates from these paper equations (camber offset, H-force ×3.0, U_P sign, VRS blend).
 
 ### MuJoCo inertia-based fluid model (used by menagerie Skydio X2 and Crazyflie via option density/viscosity) — **ADOPTED (candidate tier)**
 
@@ -439,6 +475,62 @@ Surveyed RotorS (source + firefly xacro), PX4 SITL gazebo-classic (source + head
 - **Source:** PX4/PX4-SITL_gazebo-classic src/gazebo_motor_model.cpp ~line 119; ethz-asl/rotors_simulator gazebo_motor_model.cpp ~lines 393-400.
 - **Relevance:** rotorpy already has Dryden turbulence via the wind-dynamics package; the checklist point is that the wind vector must be subtracted inside EVERY aero term (rotor drag, flapping, translational lift, AoA correction), which is a consistency requirement rather than a new model.
 - **Notes:** Worth a unit test in the JAX port: all aero forces invariant under equal shifts of (v_vehicle, v_wind).
+
+
+## NeuroBEM / agilicious agilib (EXECUTED) — full intake 2026-08-19
+
+Supersedes the paper-only survey entries above. The agilib source became verifiable and runnable through a public mirror: `alibabasomeone/agilicious_internal_mine`, pinned at commit ba8caa7. Legitimacy: the code's own in-repo README (RPG-authored) licenses it GPLv3 ("For commercial use, please contact sdavide@ifi.uzh.ch"); the request-form on the official repo is a distribution gate, not the license, and GPLv3 §10 permits recipient redistribution. Lineage verified from git history: init commit 2d78b81 by Philipp Foehn (2022-06-22) with subsequent commits by Kaufmann, Bauersfeld, and Sun (the NeuroBEM authors); every BEM/model source compiled here is **byte-identical to that init commit** (the mirror owner's 2024-25 commits touch only their own GUI/estimation additions). Caveat: this is a 2022 snapshot; the private RPG mainline may have advanced. Official agilib access has been requested in parallel as a future cross-check.
+
+Pipeline: `golden/generate/gen_agilicious.py` compiles the UNMODIFIED agilib TUs (`g++ -O2 -std=c++17 -ffp-contract=off`, Eigen 3.4.0) into a recording driver, executes 12 BEM cases (hover / forward to 18 m/s / climb / shallow-deep-oblique-fast descent / mixed-regime with body rates / lateral+yaw) and 6 simple-model cases, and — before writing — asserts a float-exact Python replica of EVERY executed path (15-point Gauss-Kronrod disk quadrature, vectorized warm-started Brent, float32 fast-atan2 with C op-order, the VRS branch with its ANY-rotor gates, the machine-generated flapping fits, force/torque composition) against the executed outputs: worst residual 2.5e-11 relative (flapping-fit transcription at 1e-16). Vectors: `agilicious_bem.json`, `agilicious_simple_models.json` (kind `agilicious_terms`); consumer: `properties/test_golden_agilicious.py`, which carries the reference numerics (GK15, float32 atan2) as explicit harness details around lambdified SPEC expressions.
+
+### ModelPropellerBEM + bem/ solvers — **ADOPTED & VERIFIED (4 terms)**
+
+- **Source files:** `agilib/src/simulator/model_propeller_bem.cpp`, `bem/{functions,propeller_state}.cpp`, `bem/{brent,gauss_kronrod}.hpp`, `math/fast_atan2.hpp` — sha256-pinned in the generator; params `model_rotor_bem.yaml` == `BEMParameters` defaults (Kingfisher 3-blade 5.1", R=64.77 mm, θ0=22.95°, θ1=−8°, chord 17→8 mm, cl0=4.797071, cd0=4.168863, k_β=5.89 N·m/rad).
+- **Terms promoted** (registry): `bem_blade_element_loads`, `bem_momentum_inflow_closure`, `vrs_empirical_inflow`, `bem_tpp_wrench` — plus the pre-existing `oblique_momentum_thrust` candidate, whose momentum equation is executed verbatim as `ThrustFunction::t_mom` and is now verified.
+- **Executed configuration facts** (differ from or absent in the paper): flapping angles are ZEROED during the disk integration ("Disable Thrust Distortion") and applied only in the composition; lift polar carries a camber offset +0.07 (paper eq. 12 has none); the H-force integral is scaled ×3.0 ("identified using real-world flight data" — single-prop BEM verified against Gill & D'Andrea wind-tunnel data per the code comment); the collective z-force is scaled ×0.9575 (frame obstruction); the VRS blend is max(v_mom, ṽ) then clamp ≤2·v_h for in-window rotors (paper: max(ṽ, v_h)); Brent solves v_i ∈ [−20, 30] m/s at tol 1e-3 with ±1 m/s warm-start brackets from the previous call (vectors record the warm-start state, making each case self-contained).
+- **Unexercised scopes:** nonzero flapping inside the integrands (the executed config zeroes it — so the U_P flapping-coupling term, incl. finding F-23, never executes); the ttMilspec-style closed-form azimuth integrals (never present); gyroscopic motor-inertia torque (declared in the header comment and the yaml, implemented nowhere — see skipped list).
+
+### Flapping-angle rational fits — **REJECTED (vehicle-specific artifacts)**
+
+`PropellerState::calculateFlapping` computes a0/a1s/b1s from three enormous machine-generated rational polynomials in (Ω, μ, v_i, α_s, p, q) with ~60 baked numeric coefficients — the CAS-exported solution of the hinge-spring moment equilibrium (paper eq. 16, "closely follow Prouty pp. 463") for ONE specific blade. Not portable physics: rejected from the spec. The angles are INPUTS to `bem_tpp_wrench` (recorded per case in the vectors; transcription pinned at 1e-16 inside the generator's replica). A general symbolic flapping closure from the moment equilibrium remains future work; the existing `flapping_force/moment_body_rate` candidates cover the small-angle regime.
+
+### ModelLinCubDrag ("ModelLinCubDragIndLift") — **ADOPTED (1 new term) + corroboration**
+
+`F = −diag(k_lin)·v_B − diag(k_cub)·v_B³ + k_ind·(v_x²+v_y²)·ẑ_B, /m` — the NeuroBEM "PolyFit" baseline family. Cubic term → new `cubic_axis_drag` (VERIFIED); linear term ≡ verified `linear_drag` (agilicious added as corroborating source); induced lift ≡ verified `translational_lift` (k_h ≡ induced_lift_coeff; agilicious added). Corrects the earlier survey claim that the form was "spanned by linear+quadratic drag" — it is linear+CUBIC plus induced lift.
+
+### ModelBodyDrag — **ADOPTED (1 new term)**
+
+Per-axis quadratic drag `F_k = −½ρ·c_k·A_k·v_k·|v_k|` (cube cd 1.04, frontal areas 1.5/1.5/3.0e-2 m² for Kingfisher) → new `per_axis_quadratic_drag` (VERIFIED); `vertical_climb_drag` is its z-restriction (mutual-exclusion noted in both). Carries finding F-19 (missing /m).
+
+### ModelMotor / ModelThrustTorqueSimple / ModelRigidBody — already covered (corroborated)
+
+First-order motor lag (τ=33 ms, `motor_tau_inv`), full-quadratic thrust/torque maps `c2Ω²+c1Ω+c0` with κ = cq2/ct2 allocation (yaw column −,−,+,+ = torque sign = −spin for rotor order fr,bl,br,fl), quaternion kinematics `q̇ = ½q⊗(0,ω)` (Hamilton wxyz via Q_right — same canonical convention), Euler equation. All executed and pinned by `agilicious_simple_models.json` — corroborates `motor_first_order_lag`, `rotor_thrust_polynomial`, `rotor_torque_polynomial`, `newton_euler`, `quaternion_kinematics` without registry changes (already multi-source). agilib's G = 9.8066 m/s² (not 9.81) — a parameter, recorded in the vectors.
+
+### Integrators — **ADOPTED (1 new term) + corroboration**
+
+`IntegratorSymplecticEuler` (velocities (v,ω,Ω) first with f(s), then positions (x,q) with f at the velocity-updated state; quaternion advanced with NEW ω against OLD q) → new `semi_implicit_euler` (VERIFIED) — the integrator NeuroBEM's evaluation runs at 1 ms steps for its energy-conservation property. `IntegratorEuler`/`IntegratorRK4` executed too; RK4 corroborates `rk4_fixed_step`.
+
+### Skipped subsystems (out of scope, dispositioned)
+
+- **LowLevelControllerSimple** (P body-rate loop + allocation inverse + inverse thrust map) and **LowLevelControllerBetaflight** (Betaflight PID emulation, gyro/dterm low-pass filters, voltage-dependent thrust map): control, not physics — the spec's boundary is MOTDES (commanded rotor speed).
+- **bridge/thrust_map.cpp** + thrust_map*.csv: hardware command calibration (thrust→DShot/SBUS vs voltage).
+- **EKF / EKF-IMU / mock-VIO**: estimation/sensor simulation, out of scope.
+- **MPC internal model** (acados-generated nominal quad ODE): control-internal duplicate of rigid body + simple thrust.
+- **Quadrotor::dynamics/jacobian** (ACC/TAU-slot controller-facing form): duplicate of the rigid-body pipeline.
+- **ModelInit** (derivative zeroing), **ground clamp** in `QuadrotorSimulator::run` (z≤0 → zero z pos/vel/acc — same family as the `ground_contact_heuristic` candidate): harness.
+- **PropellerData** struct: dead legacy duplicate of BEMParameters (its `inertia_blade_` even lacks the blade-mass factor on the second term — never executed).
+- **NeuralNet residual** (yaml section `NeuralNet.weight_file` exists; no corresponding model in this snapshot): learned, out of scope — the residual role belongs downstream (nav-train), exactly NeuroBEM's own architecture split.
+- **Motor.inertia yaml param** (9.3575e-6 kg·m²): loaded, used NOWHERE — the model_propeller_bem.hpp comment about gyroscopic propeller forces is aspirational. Our verified `rotor_inertia_moments` already covers that physics.
+- **Twist units doc-bug:** the yaml comments `twist` as deg/m, but the code applies `toRad(twist)·(r/R)` — total degrees across the span. Transcribed as executed.
+
+### Findings (continuing the F-series)
+
+- **F-19 (body-drag force-as-acceleration):** `ModelBodyDrag::run` adds the drag FORCE (½ρcA·v|v|, in N) directly into the acceleration slot — no division by mass (`model_body_drag.cpp:25`, contrast ModelLinCubDrag's `/quad_.m_`). Correct only for m = 1 kg (Kingfisher is 0.752). The vectors pin the force expression; the spec term documents the packing.
+- **F-20 (VRS ANY-rotor gate):** the vortex-ring correction triggers on `(v_ver/v_i >= 0.01).any() && (<= 2).any()` — two INDEPENDENT any() predicates over all four rotors. One rotor inside the window (or two straddling it) activates the correction for ALL rotors: `v_i = max(v_i, ṽ_i)` applies vehicle-wide, only the ≤2·v_h clamp is per-rotor (`model_propeller_bem.cpp:50-76`). Exercised by the mixed-regime case; replicated exactly.
+- **F-21 (silent Brent range-max in deep descent):** at 25 m/s descent the closure residual T_BEM(v)−T_mom(v) has NO root in the solver range [−20, 30] (momentum theory inapplicable — the very regime the VRS fit exists for). Brent's bracket check fails, `err_flag` skips iteration, and x1 = range-max **30 m/s is returned silently**; the VRS clamp (≤2·v_h) then rescues the value. Recorded as `vind_momentum = 30.0` in the vectors; the consumer pins the no-root claim itself.
+- **F-22 (float32 fast-atan2, discontinuous):** the inflow angle uses a float32 minimax approximation (max error ~4.9e-3 rad) whose two branches disagree by ~9.9e-3 rad at |U_P| = |U_T| — a jump discontinuity inside the integrand and the Brent residual. Measured effect: disk loads deviate up to **2.3% relative** from the exact-atan2 spec form (bounded explicitly in `test_exact_atan2_spec_deviation`); it can also hand Brent pseudo-roots. The spec keeps exact atan2 (smooth, differentiable); the golden tests inject the approximation as reference numerics.
+- **F-23 (U_P flapping-coupling sign, code vs paper):** `bem/functions.cpp:18-24` computes `−v_ver·β·cosψ` where paper eq. (7) prints `+v_ver·β·cosψ`. Inert as executed (flapping zeroed during integration; β ≡ 0) — the spec adopts the code form and flags it; unresolvable without upstream contact.
+- **F-24 (lever-arm frame mixing):** `PropellerState::update` builds the per-rotor hub velocity as `FLU→FRD(Rᵀv) − t_BM ×_col ω_FRD` with `t_BM` in FLU coordinates (front-right rotor has y < 0) crossed against an FRD angular rate — the ω×r contribution has sign-inconsistent components wherever rotors have y ≠ 0 (e.g. roll rate p produces +p·y_FLU vertical flow instead of −p·y_FRD·(−1)). Sub-0.5 m/s at |ω| = 3 rad/s with 0.106 m arms, but structurally wrong in one frame or the other. Executed behavior replicated exactly (hub velocities are recorded inputs); the spec does NOT adopt the hub-velocity computation — canonical v + ω×r composition stays with the verified terms.
 
 
 ## Motor / ESC / battery first-principles literature

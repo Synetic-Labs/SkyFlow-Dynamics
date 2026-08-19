@@ -23,7 +23,7 @@ expressions, and every backend runs the same golden + property suite.
 |---|---|
 | `skyflow_dynamics/spec/` | The SymPy source of truth: one module per physics domain, plus `registry.py` — every term with tier, provenance, and tests. |
 | `properties/` | pytest suite of physics invariants (accuracy): symbolic proofs, conservation, symmetry, dimensional scaling, Jacobian-vs-FD, and the golden authenticity tests. |
-| `golden/vectors/` | Frozen reference vectors from **three independent provenances**: RotorPy `research-additions` (full model, 12 files), Crazyflow's actual running code, SkyDreamer's actual running code — each with commit/sha provenance. |
+| `golden/vectors/` | Frozen reference vectors from **five independent provenances**: RotorPy `research-additions` (full model, 12 files), Crazyflow's actual running code, SkyDreamer's actual running code, JSBSim's actual running engine (term-level vectors: ISA atmosphere, Dryden low-altitude turbulence, BLDC+propeller chain, rotor dynamic inflow/torque), and agilicious agilib's actual compiled code (NeuroBEM blade-element-momentum rotor, drag models, integrators) — each with commit/sha provenance. |
 | `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
 | `golden/checkdata/` | Published check data from pinned documents (archaic-source exception): author-run reference statistics where the reference code is no longer executable. Currently NASA CR-1998-206937 (Dryden). |
 | `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
@@ -108,6 +108,14 @@ uv run --with scipy --with array-api-compat python golden/generate/gen_crazyflow
 
 # SkyDreamer (execs their literal dynamics source, njit stubbed):
 uv run python golden/generate/gen_skydreamer.py --out golden/vectors
+
+# JSBSim (runs the official PyPI wheel — the actual C++ engine — on custom minimal
+# testbeds; every family self-checks its transcription against the executed values):
+uv run --with jsbsim python golden/generate/gen_jsbsim.py --out golden/vectors
+
+# agilicious agilib (clones the pinned GPLv3 mirror, compiles the actual C++ models with
+# g++ + Eigen, and asserts a float-exact Python replica of every executed path first):
+uv run python golden/generate/gen_agilicious.py --out golden/vectors
 
 # NASA CR-1998-206937 Dryden check data (pinned document, not runnable code — a
 # self-checking transcription freezer; --pdf verifies the sha256 pin if you have the file):
