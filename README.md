@@ -122,6 +122,13 @@ uv run python golden/generate/gen_agilicious.py --out golden/vectors
 # NASA CR-1998-206937 Dryden check data (pinned document, not runnable code — a
 # self-checking transcription freezer; --pdf verifies the sha256 pin if you have the file):
 uv run python golden/generate/gen_dryden_cr206937.py
+
+# rpg_flightning (executes their JAX models incl. the surrogate-gradient custom_jvp;
+# jax pinned to the era version — the reference is un-differentiable on JAX >= 0.11,
+# finding F-28; asserts a plain-numpy replica of every executed path first):
+uv run --python 3.12 --with "jax==0.4.30" --with jax-dataclasses --with chex \
+    --with "flax<0.9" --with pyyaml python golden/generate/gen_flightning.py \
+    --flightning /path/to/rpg_flightning --out golden/vectors
 ```
 
 ## Adding new physics

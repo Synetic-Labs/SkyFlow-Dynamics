@@ -50,7 +50,8 @@ SOURCES = {s.key: s for s in [
     Source("skydreamer", "SkyDreamer (arXiv:2510.14783) + reference implementation "
            "embodied/envs/skydreamer.py", "https://github.com/The-Real-Thisas/dreamerv3"),
     Source("flightning", "Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual "
-           "Features Using Differentiable Simulation, ICRA 2025",
+           "Features Using Differentiable Simulation, ICRA 2025; reference implementation "
+           "executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)",
            "https://github.com/uzh-rpg/rpg_flightning"),
     Source("forster2015", "Förster — System Identification of the Crazyflie 2.0 Nano "
            "Quadrocopter, ETH Zürich, 2015"),
@@ -157,8 +158,11 @@ TERMS = (
     Term("motor_exact_exp_discretization", "verified", "discretization",
          "Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the RK stages",
          "spec.motor.exact_exp_step", ("flightning",), ("tau_m",),
-         ("properties/test_motor.py", "properties/test_golden.py"),
-         "Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only."),
+         ("properties/test_motor.py", "properties/test_golden.py",
+          "properties/test_golden_flightning.py"),
+         "Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag "
+         "only. Verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py "
+         "((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail)."),
     Term("throttle_curve", "verified", "actuator",
          "Ω_c = (Ω_max−Ω_min)√(k·u² + (1−k)u) + Ω_min",
          "spec.motor.throttle_to_speed", ("skydreamer",), (),
@@ -191,12 +195,16 @@ TERMS = (
          ("properties/test_wrench.py", "properties/test_golden.py")),
     Term("rotor_inertia_moments", "verified", "rotor_aero",
          "Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ",
-         "spec.wrench.rotor_inertia_moment", ("rotorpy", "crazyflow", "skydreamer"),
-         ("I_rot", "spin"), ("properties/test_wrench.py", "properties/test_golden.py"),
+         "spec.wrench.rotor_inertia_moment", ("rotorpy", "crazyflow", "skydreamer",
+                                               "flightning"),
+         ("I_rot", "spin"), ("properties/test_wrench.py", "properties/test_golden.py",
+                             "properties/test_golden_flightning.py"),
          "Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped "
          "(finding F-3, confirmed against their running code); fixed upstream by "
          "learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden "
-         "vectors now cross-validate this term."),
+         "vectors now cross-validate this term. flightning implements ONLY the yaw-reaction "
+         "half (+I_m·Σ dir_i·Ω̇_i·ẑ with dir_i = −s_i ≡ this term at ω = 0, executed-code "
+         "verified) with the continuous rate Ω̇ = (Ω_c−Ω)/τ; it omits the −ω×h precession."),
 
     # ---------------- aerodynamics ----------------
     Term("rotor_drag_hforce", "verified", "rotor_aero",
@@ -261,11 +269,18 @@ TERMS = (
     Term("point_mass_surrogate", "verified", "differentiation",
          "Point mass + kinematic attitude; surrogate Jacobian for BPTT via straight-through",
          "spec.simplified.step, spec.simplified.dynamics", ("flightning",), (),
-         ("properties/test_simplified.py",)),
+         ("properties/test_simplified.py", "properties/test_golden_flightning.py"),
+         "Verified 2026-08-19 against the EXECUTED flightning quadrotor_dyn: primal steps, "
+         "jax.jvp tangents, AND the step()-level custom_jvp wiring (c = f_d/m, dt-tangent 0) "
+         "— executed-code confirmation of the surrogate-gradient scheme. Their attitude step "
+         "is a biased-angle Rodrigues, not the exp map (finding F-25, deviation bounded in "
+         "the golden test); their custom_jvp is broken on JAX ≥ 0.11 (finding F-28)."),
     Term("rk4_fixed_step", "verified", "discretization",
          "Classical RK4; the differentiable reference integrator (adaptive solvers are not "
-         "cleanly differentiable)", "spec.discretization.rk4_step", ("flightning", "rotorpy"),
-         (), ("properties/test_motor.py", "properties/test_golden.py")),
+         "cleanly differentiable)", "spec.discretization.rk4_step", ("rotorpy",),
+         (), ("properties/test_motor.py", "properties/test_golden.py"),
+         "flightning attribution removed 2026-08-19: its executed integrator is explicit "
+         "Euler at 1 kHz (exact attitude/motor substeps), no RK4 anywhere in the repo."),
 
     # ---------------- candidates: ground effect / downwash ----------------
     Term("ground_effect_cheeseman_bennett", "candidate", "rotor_aero",
@@ -456,13 +471,18 @@ TERMS = (
 
     Term("per_axis_quadratic_drag", "verified", "frame_aero",
          "F_k = −k_Q,k·v_a,k·|v_a,k| per body axis (k_Q = ½ρ·c_k·A_k physical packing)",
-         "spec.rotor_aero.per_axis_quadratic_drag", ("agilicious", "skydreamer"), (),
-         ("properties/test_bem.py", "properties/test_golden_agilicious.py"),
+         "spec.rotor_aero.per_axis_quadratic_drag", ("agilicious", "skydreamer",
+                                                     "flightning"), (),
+         ("properties/test_bem.py", "properties/test_golden_agilicious.py",
+          "properties/test_golden_flightning.py"),
          "Verified 2026-08-19 against the EXECUTED agilib ModelBodyDrag "
-         "(golden/vectors/agilicious_simple_models.json). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — don't mix "
-         "coefficients. vertical_climb_drag is its z-restriction: enable one, not both. "
-         "⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without dividing "
-         "by mass (finding F-19); vectors pin the force expression."),
+         "(golden/vectors/agilicious_simple_models.json) and the EXECUTED flightning "
+         "compute_drag_force (same ½ρ·c_k·A_k packing, correctly divided by mass — no F-19 "
+         "analog; its ±50% coefficient randomization is harness-side, replayed as effective "
+         "params). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — "
+         "don't mix coefficients. vertical_climb_drag is its z-restriction: enable one, not "
+         "both. ⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without "
+         "dividing by mass (finding F-19); vectors pin the force expression."),
 
     Term("cubic_axis_drag", "verified", "frame_aero",
          "F_k = −k_C,k·v_a,k³ per body axis — cubic companion of linear_drag (PolyFit model)",

@@ -533,6 +533,57 @@ First-order motor lag (τ=33 ms, `motor_tau_inv`), full-quadratic thrust/torque 
 - **F-24 (lever-arm frame mixing):** `PropellerState::update` builds the per-rotor hub velocity as `FLU→FRD(Rᵀv) − t_BM ×_col ω_FRD` with `t_BM` in FLU coordinates (front-right rotor has y < 0) crossed against an FRD angular rate — the ω×r contribution has sign-inconsistent components wherever rotors have y ≠ 0 (e.g. roll rate p produces +p·y_FLU vertical flow instead of −p·y_FRD·(−1)). Sub-0.5 m/s at |ω| = 3 rad/s with 0.106 m arms, but structurally wrong in one frame or the other. Executed behavior replicated exactly (hub velocities are recorded inputs); the spec does NOT adopt the hub-velocity computation — canonical v + ω×r composition stays with the verified terms.
 
 
+## rpg_flightning (EXECUTED) — full intake 2026-08-19
+
+Supersedes the paper-level summary under "Prior evaluations" below. Source: the official
+repo `uzh-rpg/rpg_flightning`, pinned at commit a5d5619 (public, MIT-style NOTICE). The
+package is small: two quadrotor models (full + point-mass surrogate), a body-drag model, the
+surrogate-gradient `custom_jvp` machinery, two hovering envs, a double-sphere camera, and
+BPTT/PPO training code.
+
+Pipeline: `golden/generate/gen_flightning.py` imports the UNMODIFIED package and executes it
+under `jax_enable_x64` on CPU with **jax pinned to the era version 0.4.30** — on current JAX
+the reference is un-differentiable (finding F-28). It freezes `flightning_simple_jvp.json`
+(point-mass `quadrotor_dyn`: 8 primal cases, 7 `jax.jvp` tangent cases, 3 `Quadrotor.step()`
+custom-JVP cases that fire the surrogate under differentiation) and
+`flightning_full_step.json` (10 `_dynamics` 1 kHz substeps with commanded motor speeds given
+directly, 3 controller-in-the-loop 20-substep `step()` calls). Domain-randomization draws
+(thrust map ×[0.95, 1.05], drag coefficients ×[0.5, 1.5]; `dr_key` is drawn at env reset and
+never advanced, so they are per-episode constants) are replayed through the identical key
+splits and recorded as effective parameters. Before writing, a plain-numpy replica of every
+executed path is asserted against the JAX outputs (≤1e-11 substeps, ≤1e-9 20-substep chains).
+Consumer: `properties/test_golden_flightning.py` — spec terms verified around the reference's
+numerics carried as explicit harness details (biased-angle Rodrigues + its exact symbolic
+derivative, float32 allocation matrix/inverse, explicit-Euler composition, P controller,
+post-step rotor clip).
+
+### Point-mass surrogate + custom_jvp surrogate gradients — **VERIFIED (was paper-level)**
+
+- **Source files:** `objects/quadrotor_simple_obj.py` (`quadrotor_dyn`), `objects/quadrotor_obj.py:239-308` (`_step`/`_step_jvp`), `utils/math.py:20-33` — sha256-pinned in the vectors.
+- `spec.simplified.step` reproduces the executed primal (position/velocity rows exact at 1e-12; attitude via the true exp map within the F-25 bound, and exactly via the harness biased-Rodrigues). The executed `jax.jvp` tangents match the spec surrogate algebra: the dp/dv tangent rows contain no Rodrigues term — they are literally `spec.simplified`'s tangent map. The `step()`-level custom-JVP cases pin the wiring from executed code: primal = 20 low-level substeps (controller in loop), tangent = single point-mass JVP over the full dt at **c = f_d/m** with **dt-tangent 0**.
+- **Surrogate passthrough (executed behavior):** `_step_jvp` populates only the p/R/v tangent slots; ω, Ω̇, Ω, and acc tangents pass the INPUT tangents through unchanged (`quadrotor_obj.py:301-304`). Consequence for their training setup: the reward's acceleration penalty receives NO gradient through the dynamics — acc tangents stay at their seed (zero) through the whole BPTT chain. The spec's straight-through formulation detaches those slots explicitly (spec/simplified.py "Motor state and wind pass through detached").
+
+### Full model `Quadrotor._dynamics` — already covered (corroborated, executed-verified)
+
+Explicit Euler at 1 kHz over: quadratic thrust map `c_T·Ω²` (≡ `rotor_thrust_polynomial`, DR-drawn c_T recorded), per-axis quadratic body drag `−½ρ·c_k·A_k·v_k|v_k|` in body frame, correctly `/m` (≡ `per_axis_quadratic_drag`; flightning added as source), allocation-matrix moments with κ [N·m/N] and yaw column κ·(−1,−1,+1,+1) for rotor order fr,bl,br,fl (≡ structural r×F + `−s_i·κ·f_i`, asserted in `test_allocation_is_structural`; canonical spin s = (+1,+1,−1,−1) = −motor_directions), rotor-inertia YAW REACTION `+I_m·Σ dir_i·Ω̇_i·ẑ` with the continuous rate `Ω̇ = (Ω_c−Ω)/τ` (≡ `rotor_inertia_moments` at ω = 0 — the −ω×h precession half is absent), Euler rigid-body `J⁻¹(τ − ω×Jω)`, exact-exponential motor step + clip to [Ω_min, Ω_max] (≡ `motor_exact_exp_discretization`, now executed-verified from this source too). Attitude via the biased Rodrigues (F-25). Frames: world z-up, body FLU, gravity (0,0,−9.81), wxyz-consistent (their `rot_from_quat` permutes to scipy xyzw) — all canonical. Registry corrections: `rk4_fixed_step` no longer cites flightning (its integrator is explicit Euler; no RK4 exists in the repo).
+
+### Skipped subsystems (out of scope, dispositioned)
+
+- **Low-level controller** (`_low_level_controller`: P body-rate loop K = diag(20, 20, 41) + ω×Jω feedforward + float32 allocation inverse + thrust clip [c_T·Ω_min², 3.5 N] + inverse thrust map): control, not physics — replicated in the golden test as a harness detail (its gains are recorded in the vectors).
+- **Domain randomization** (per-episode thrust-map ±5%, drag-coefficient ±50%): training harness; replayed and recorded as effective parameters.
+- **Env action-delay queue** (`hovering_state_env`: transport delay 0.02 s, split each env step into two `step()` calls of dt₁ = delay mod dt and dt − dt₁ with consecutive queued actions): actuation-latency HARNESS model — belongs to the SkyFlow harness layer, not the physics spec.
+- **Double-sphere camera** (`sensors/double_sphere_camera.py`): vision sensor model — out of scope for the dynamics spec (pointer for the harness if visual features are ever simulated).
+- **WorldBox** collision termination, obs normalization, reward (`smooth_l1`), BPTT/PPO, MLP: harness/training.
+- **`QuadrotorSimple.step`**: dead code AND broken (finding F-26); the live path is `quadrotor_dyn`.
+
+### Findings (continuing the F-series)
+
+- **F-25 (biased Rodrigues angle):** `rotation_matrix_from_vector` computes `θ = ‖|φ| + ε‖` with ε = 1e-5 added to each component's absolute value (`utils/math.py:25`) — a smooth-at-zero guard that makes the "exact" attitude step NOT the exponential map: the Rodrigues coefficients are evaluated at a biased angle while K uses the unbiased vector, so the result is not exactly in SO(3) (measured orthogonality defect up to 2.1e-8 per step over the vector envelope; true-exp-map deviation up to ~1e-7, bounded in `test_biased_rodrigues_deviation`). At φ = 0 exactly, K = 0 and the step returns I exactly. The spec keeps the true exp map (quaternion.from_rotation_vector); golden tests replicate the biased form as reference numerics, including its exact symbolic derivative for the JVP rows.
+- **F-26 (QuadrotorSimple.step is a no-op):** `state.replace(p=p, R=R, v=v)` discards its return value (`objects/quadrotor_simple_obj.py:77`) — the method returns the INPUT state unchanged. Dead code in the repo (nothing calls it; the surrogate path uses `quadrotor_dyn` directly), but a trap for anyone consuming the class API.
+- **F-27 (float32 allocation matrix):** `allocation_matrix` is built with `dtype=np.float32` and its inverse is computed in float32 (`objects/quadrotor_obj.py:207-222`) inside an otherwise float64 pipeline — lever arms enter as float32(0.04) etc. and the inverse carries ~1e-7 relative error (`ALLOC_INV @ ALLOC` deviates from I at ~1e-7, pinned in `test_allocation_is_structural`). The vectors record both matrices AS EXECUTED; cross-validation must use these effective values, not the nominal yaml numbers.
+- **F-28 (custom JVP broken on current JAX):** `_step_jvp` returns the PRIMAL `dr_key` in the tangent slot (`objects/quadrotor_obj.py:303`); JAX ≥ 0.11 (checked) rejects the rule — `TypeError: Custom JVP rule must produce primal and tangent outputs with corresponding shapes and dtypes … expecting tangent float0` — in BOTH forward and reverse mode, for typed and uint32 keys alike, so `Quadrotor.step` (and hence the paper's whole BPTT path) cannot be differentiated there. Executes as designed on era jax 0.4.30, which the generator pins.
+
+
 ## Motor / ESC / battery first-principles literature
 
 All four areas researched from primary sources with exact provenance. (1) DC motor model: the credible published quadrotor form is Bangura et al. ICRA 2014 eqs (11)-(15) -- v_a = Ke*W + i*Ra + La*di/dt, tau = (Kq0 - Kq1*i)*i, Ir*dW/dt = tau - (b1*W^2 + b2*W) -- with a full measured parameter table (Ra 0.07 Ohm, La 0.1 mH, Ir 5.38e-5 kg m^2, Kv 950); inductance is negligible (tau_e ~ 1.4 ms, authors neglect it), giving the quasi-static nonlinear speed ODE J*dW/dt = (Kq/Ra)(u*Vbatt - Ke*W) - km*W^2, which linearizes to rotorpy's existing tau_m lag with tau_m = J/(KqKe/Ra + b + 2*km*W0) and yields a closed-form battery-coupled steady state W_ss(u*Vbatt). (2) Bangura & Mahony's dynamic thrust: T = 2*rho*A*v_i*U, P_a = 2*rho*A*v_i*U*(v_i - Vz), U = sqrt(Vx^2+Vy^2+(v_i-Vz)^2), implicit v_i solve, coupled to the motor by P_m = P_a/FoM + Ir*W*dW/dt (FoM ~ 0.67 measured); this is the first-principles superset of rotorpy's existing empirical AoA/advance-ratio, climb, and translational-lift corrections and must replace rather than stack on them. (3) Batteries: verified the Chen & Rincon-Mora 2006 Thevenin ECM including all six fitted LiPo coefficient functions from the author-hosted PDF, and the actually-standard drone-sim model, Gazebo's LinearBatteryPlugin V = e0 + e1*(1 - q/c) - r*i_smooth (exact code); Tremblay-Dessaint and Peukert documented but recommended skip (redundant / wrong chemistry with contested exponent). (4) ESC: linear duty-to-mean-voltage confirmed from Crazyflie firmware comments; both Crazyflie compensation generations extracted verbatim with coefficients -- legacy quadratic (tag 2022.01 motors.c lines 152-173: v = -0.0006239*g^2 + 0.088*g, pwm = 65535*v/Vbatt) and current cubic thrust(v_motor) with Cardano inversion plus all three per-propeller coefficient sets from platform_defaults_cf2.h lines 57-91. Net recommendation: seven adopt-candidates that share one architecture -- voltage-input motor ODE + per-motor current draw -> load-dependent battery model -> V_batt feeds back into W_ss and firmware-style compensation -- replacing rotorpy's open-loop time-based sag and decoupled throttle curve; everything already in the verified inventory (first-order lag, exact-exp discretization, polynomial thrust maps, PWM quantization) was confirmed as the correct reduced form of these models, not contradicted.
@@ -843,6 +894,8 @@ re-litigates them.
   per-rotor identified k_p/k_q/k_r (not structural); quadratic drag is per-axis |v_k|·v_k.
 - **rpg_flightning (ICRA 2025)** — source of the exact-exponential motor discretization,
   the point-mass surrogate model, and the surrogate-gradient scheme. Physically a subset of
-  the verified tier.
+  the verified tier. **SUPERSEDED 2026-08-19:** full executed-code intake (commit a5d5619,
+  era jax 0.4.30) — see "rpg_flightning (EXECUTED)" above; findings F-25…F-28; the earlier
+  RK4 attribution was wrong (its integrator is explicit Euler at 1 kHz).
 - **Genesis (Genesis-Embodied-AI)** — nothing to port: KF·rpm² force + KM·rpm² yaw torque on
   fixed joints only; no gyroscopic effects (claims to the contrary unfounded).

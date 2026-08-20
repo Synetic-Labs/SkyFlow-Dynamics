@@ -29,7 +29,12 @@ commanded speeds; ω_cmd from the body-rate command when the control interface p
 else the current ω. Motor state and wind pass through detached (the point mass has neither).
 
 Source: Heeg, Song, Scaramuzza, "Learning Quadrotor Control From Visual Features Using
-Differentiable Simulation", ICRA 2025 (rpg_flightning).
+Differentiable Simulation", ICRA 2025 (rpg_flightning). Verified 2026-08-19 against the
+EXECUTED reference (gen_flightning.py): primal steps, jax.jvp tangents, and the step()-level
+custom_jvp wiring (c = f_d/m, dt-tangent 0). ⚠ The reference's attitude step is a
+biased-angle Rodrigues, not the exp map (finding F-25 — this spec keeps the exp map; the
+golden test bounds the deviation), and its custom_jvp rule is broken on JAX ≥ 0.11
+(finding F-28 — the reverse-mode straight-through form above does not share that defect).
 """
 
 import sympy as sp

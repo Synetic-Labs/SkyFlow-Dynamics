@@ -172,9 +172,9 @@ Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ.
 
 - **Defined in:** `spec.wrench.rotor_inertia_moment`
 - **Parameters:** `I_rot`, `spin`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
-- **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
-- **Notes:** Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped (finding F-3, confirmed against their running code); fixed upstream by learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden vectors now cross-validate this term.
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py; Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
+- **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`, `properties/test_golden_flightning.py`
+- **Notes:** Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped (finding F-3, confirmed against their running code); fixed upstream by learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden vectors now cross-validate this term. flightning implements ONLY the yaw-reaction half (+I_m·Σ dir_i·Ω̇_i·ẑ with dir_i = −s_i ≡ this term at ω = 0, executed-code verified) with the continuous rate Ω̇ = (Ω_c−Ω)/τ; it omits the −ω×h precession.
 
 ### `rotor_drag_hforce` — **verified**
 
@@ -396,9 +396,9 @@ D = −‖v_a‖·diag(c_D)·v_a at CoM.
 F_k = −k_Q,k·v_a,k·|v_a,k| per body axis (k_Q = ½ρ·c_k·A_k physical packing).
 
 - **Defined in:** `spec.rotor_aero.per_axis_quadratic_drag`
-- **Sources:** Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
-- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`
-- **Notes:** Verified 2026-08-19 against the EXECUTED agilib ModelBodyDrag (golden/vectors/agilicious_simple_models.json). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — don't mix coefficients. vertical_climb_drag is its z-restriction: enable one, not both. ⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without dividing by mass (finding F-19); vectors pin the force expression.
+- **Sources:** Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py); SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py; Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
+- **Tests:** `properties/test_bem.py`, `properties/test_golden_agilicious.py`, `properties/test_golden_flightning.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED agilib ModelBodyDrag (golden/vectors/agilicious_simple_models.json) and the EXECUTED flightning compute_drag_force (same ½ρ·c_k·A_k packing, correctly divided by mass — no F-19 analog; its ±50% coefficient randomization is harness-side, replayed as effective params). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — don't mix coefficients. vertical_climb_drag is its z-restriction: enable one, not both. ⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without dividing by mass (finding F-19); vectors pin the force expression.
 
 ### `cubic_axis_drag` — **verified**
 
@@ -460,17 +460,18 @@ Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the 
 
 - **Defined in:** `spec.motor.exact_exp_step`
 - **Parameters:** `tau_m`
-- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025
-- **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
-- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only.
+- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
+- **Tests:** `properties/test_motor.py`, `properties/test_golden.py`, `properties/test_golden_flightning.py`
+- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only. Verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py ((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail).
 
 ### `rk4_fixed_step` — **verified**
 
 Classical RK4; the differentiable reference integrator (adaptive solvers are not cleanly differentiable).
 
 - **Defined in:** `spec.discretization.rk4_step`
-- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
+- **Notes:** flightning attribution removed 2026-08-19: its executed integrator is explicit Euler at 1 kHz (exact attitude/motor substeps), no RK4 anywhere in the repo.
 
 ### `semi_implicit_euler` — **verified**
 
@@ -498,8 +499,9 @@ q̇ = ½ q ⊗ (0, ω) + K·(1−‖q‖²)·q — smooth Lagrange-style norm st
 Point mass + kinematic attitude; surrogate Jacobian for BPTT via straight-through.
 
 - **Defined in:** `spec.simplified.step, spec.simplified.dynamics`
-- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025
-- **Tests:** `properties/test_simplified.py`
+- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
+- **Tests:** `properties/test_simplified.py`, `properties/test_golden_flightning.py`
+- **Notes:** Verified 2026-08-19 against the EXECUTED flightning quadrotor_dyn: primal steps, jax.jvp tangents, AND the step()-level custom_jvp wiring (c = f_d/m, dt-tangent 0) — executed-code confirmation of the surrogate-gradient scheme. Their attitude step is a biased-angle Rodrigues, not the exp map (finding F-25, deviation bounded in the golden test); their custom_jvp is broken on JAX ≥ 0.11 (finding F-28).
 
 
 ## Environment (atmosphere / turbulence)
@@ -581,7 +583,7 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **mahony2012**: Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
 - **crazyflow**: Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml — <https://github.com/learnsyslab/crazyflow>
 - **skydreamer**: SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py — <https://github.com/The-Real-Thisas/dreamerv3>
-- **flightning**: Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025 — <https://github.com/uzh-rpg/rpg_flightning>
+- **flightning**: Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28) — <https://github.com/uzh-rpg/rpg_flightning>
 - **forster2015**: Förster — System Identification of the Crazyflie 2.0 Nano Quadrocopter, ETH Zürich, 2015
 - **graf**: Graf — Quaternions and Dynamics (quaternion kinematics)
 - **eschmann2024**: Eschmann et al. — Data-Driven System Identification of Quadrotors Subject to Motor Delays, 2024 (arXiv:2404.07837)
