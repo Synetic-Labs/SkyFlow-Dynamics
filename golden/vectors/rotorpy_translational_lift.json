@@ -557,10 +557,10 @@
  "schema": 1,
  "provenance": {
   "generator": "golden/generate/gen_rotorpy.py",
-  "source": "RotorPy (Synetic-Labs/rotorpy fork of spencerfolk/rotorpy) \u2014 Multirotor NumPy dynamics, canonical path",
-  "source_branch": "research-additions",
-  "source_commit": "68c3d267d4b9e47635e871640d9415e6c62e74d9",
-  "date": "2026-08-10",
-  "conventions": "converted to SkyFlow canonical: quaternion wxyz, spin=-rotor_directions, wind/external wrench as inputs, aero=False -> aero coefficients zeroed"
+  "source": "RotorPy (spencerfolk/rotorpy) \u2014 Multirotor NumPy dynamics, canonical path",
+  "source_branch": "main",
+  "source_commit": "9b760b898f0cefe1f82348c462e84834d0662c98",
+  "date": "2026-08-20",
+  "conventions": "converted to SkyFlow canonical: quaternion wxyz, spin=-rotor_directions, wind as input, aero=False -> aero coefficients zeroed"
  }
 }

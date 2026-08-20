@@ -40,8 +40,8 @@ class Term:
 SOURCES = {s.key: s for s in [
     Source("rotorpy", "Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator "
            "with Aerodynamics for Education and Research (arXiv:2306.04485); reference "
-           "implementation branch research-additions (Synetic-Labs/rotorpy fork)",
-           "https://github.com/Synetic-Labs/rotorpy"),
+           "implementation github.com/spencerfolk/rotorpy",
+           "https://github.com/spencerfolk/rotorpy"),
     Source("mahony2012", "Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, "
            "Estimation, and Control of Quadrotor, IEEE RAM 2012"),
     Source("crazyflow", "Crazyflow first-principles dynamics "
@@ -91,8 +91,22 @@ SOURCES = {s.key: s for s in [
     Source("kai2017", "Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors "
            "exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)"),
     Source("rotors_px4", "ethz-asl/rotors_simulator gazebo_motor_model.cpp + "
-           "PX4/PX4-SITL_gazebo-classic variant (signed rolling moment)",
+           "PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h "
+           "FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); "
+           "gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)",
            "https://github.com/ethz-asl/rotors_simulator"),
+    Source("hamandi2021", "Hamandi, Usai, Sablé, Staub, Tognon, Franchi — Design of "
+           "Multirotor Aerial Vehicles: a Taxonomy Based on Input Allocation, IJRR "
+           "40(8-9):1015-1044, 2021, doi 10.1177/02783649211025998, Eq. (1) (per-rotor "
+           "arbitrary unit thrust axis; equation verified from the open-access HAL PDF "
+           "hal-02433405v2)",
+           "https://hal.science/hal-02433405"),
+    Source("titterton2004", "Titterton & Weston — Strapdown Inertial Navigation Technology, "
+           "2nd ed., IEE Radar, Sonar and Navigation Series 17 / AIAA, 2004, "
+           "doi 10.1049/PBRA017E — the standard reference for strapdown specific-force "
+           "measurement and lever-arm ('size effect') compensation. Book text not directly "
+           "consulted: the spec's IMU model is derived from rigid-body kinematics and "
+           "proven against an independent closed-form reference (test_sensors.py)"),
     Source("chen2006", "Chen & Rincon-Mora — Accurate Electrical Battery Model Capable of "
            "Predicting Runtime and I-V Performance, IEEE Trans. Energy Conversion 21(2), 2006"),
     Source("crazyflie_fw", "bitcraze/crazyflie-firmware — motors.c "
@@ -150,19 +164,21 @@ TERMS = (
          ("properties/test_motor.py", "properties/test_golden.py")),
     Term("motor_asymmetric_lag", "verified", "actuator",
          "Separate spin-up/spin-down linear+quadratic rates",
-         "spec.motor.asymmetric_lag", ("crazyflow",), ("ka1", "ka2", "kd1", "kd2"),
+         "spec.motor.asymmetric_lag", ("crazyflow", "rotors_px4"), ("ka1", "ka2", "kd1", "kd2"),
          ("properties/test_motor.py", "properties/test_golden.py"),
          "Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry "
          "over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces "
-         "to first-order at (1/τ, 0, 1/τ, 0)."),
+         "to first-order at (1/τ, 0, 1/τ, 0). RotorS/PX4's FirstOrderFilter is the "
+         "pure-exponential special case (ka2 = kd2 = 0)."),
     Term("motor_exact_exp_discretization", "verified", "discretization",
          "Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the RK stages",
-         "spec.motor.exact_exp_step", ("flightning",), ("tau_m",),
-         ("properties/test_motor.py", "properties/test_golden.py",
-          "properties/test_golden_flightning.py"),
+         "spec.motor.exact_exp_step", ("flightning", "rotors_px4"), ("tau_m",),
+         ("properties/test_motor.py", "properties/test_golden_flightning.py"),
          "Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag "
-         "only. Verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py "
-         "((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail)."),
+         "only. Exactness proven symbolically against the lag ODE (test_motor.py); "
+         "verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py "
+         "((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail); also "
+         "RotorS' FirstOrderFilter."),
     Term("throttle_curve", "verified", "actuator",
          "Ω_c = (Ω_max−Ω_min)√(k·u² + (1−k)u) + Ω_min",
          "spec.motor.throttle_to_speed", ("skydreamer",), (),
@@ -191,12 +207,14 @@ TERMS = (
          "⚠ RotorPy's rotor_directions = torque sign = −spin (finding F-6)."),
     Term("thrust_axis_misalignment", "verified", "rotor_aero",
          "Per-rotor unit thrust axis ê_i ≠ ẑ from assembly tolerance → parasitic forces/moments",
-         "spec.wrench.body_wrench", ("rotorpy",), ("axis",),
-         ("properties/test_wrench.py", "properties/test_golden.py")),
+         "spec.wrench.body_wrench", ("hamandi2021",), ("axis",),
+         ("properties/test_wrench.py",),
+         "General per-rotor axis form per Hamandi Eq. (1). No executed reference models "
+         "assembly tilt directly; verified by exact hand-computed wrench tests "
+         "(test_wrench.py) — pure geometry, zero numerical slack."),
     Term("rotor_inertia_moments", "verified", "rotor_aero",
          "Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ",
-         "spec.wrench.rotor_inertia_moment", ("rotorpy", "crazyflow", "skydreamer",
-                                               "flightning"),
+         "spec.wrench.rotor_inertia_moment", ("crazyflow", "skydreamer", "flightning"),
          ("I_rot", "spin"), ("properties/test_wrench.py", "properties/test_golden.py",
                              "properties/test_golden_flightning.py"),
          "Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped "
@@ -260,10 +278,12 @@ TERMS = (
     # ---------------- sensors ----------------
     Term("imu_measurement", "verified", "sensor",
          "Specific force + body rate at offset/rotated mount, lever-arm terms in body frame",
-         "spec.sensors.imu", ("rotorpy",), (),
+         "spec.sensors.imu", ("titterton2004",), (),
          ("properties/test_sensors.py",),
-         "Frame-mixing defects F-1/F-2 found and fixed in the reference; equations here are "
-         "the corrected form."),
+         "Derived from rigid-body kinematics: a_S = a_B + α×r + ω×(ω×r) with all lever-arm "
+         "quantities in the body frame, rotated once; proven against an independent "
+         "closed-form model in test_sensors.py. Upstream rotorpy's IMU mixes frames "
+         "(findings F-1/F-2, see REFERENCES.md) and is not usable as a reference."),
 
     # ---------------- differentiable simulation ----------------
     Term("point_mass_surrogate", "verified", "differentiation",
@@ -584,6 +604,19 @@ TERMS = (
          "differentiate through the integrator). d‖q‖²/dt = 2K·ε·‖q‖², ε = 1−‖q‖² → norm "
          "error decays at rate ≈ 2K; exactly quaternion.kinematics on the unit manifold. "
          "Textbook basis: Stevens & Lewis; Zipfel. Choose K·dt ≪ 1."),
+
+    # ---------------- candidates: sensors ----------------
+    Term("imu_stochastic_errors", "candidate", "sensor",
+         "Per-axis IMU corruption: exact-discretized Gauss–Markov bias + white noise + turn-on bias",
+         "spec.sensors.imu_bias_gauss_markov_step + spec.sensors.imu_corrupt",
+         ("rotors_px4",), (),
+         ("properties/test_candidates.py",),
+         "b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. "
+         "Exact OU discretization (Maybeck Vol. 1 Eq. 4-114, as cited in gazebo_imu_plugin.cpp; "
+         "book not directly consulted — exactness proven symbolically instead). Unit-normal "
+         "draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. "
+         "RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero "
+         "rather than the stationary σ_b²τ/2 (their own TODO)."),
 
     # ---------------- harness (tracked, not physics) ----------------
     Term("command_transport_delay", "verified", "harness",

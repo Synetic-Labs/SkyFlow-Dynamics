@@ -106,5 +106,13 @@ def test_golden(path):
         _check(s_next, expected, ctx)
 
 
+#: The deliberate full-statedot/step vector set. Term-level vectors (jsbsim_*, agilicious_*)
+#: are asserted by their own test modules.
+EXPECTED = {
+    "rotorpy_base_no_aero", "rotorpy_aero_default_wind", "rotorpy_aero_drag_flap",
+    "rotorpy_translational_lift", "crazyflow_cf2x_L250", "skydreamer_forces",
+}
+
+
 def test_vectors_present():
-    assert len(FILES) >= 12, "golden vector set incomplete"
+    assert {p.stem for p in FILES} >= EXPECTED, "golden vector set incomplete"

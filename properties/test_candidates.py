@@ -11,6 +11,7 @@ from skyflow_dynamics.spec import (
     motor_electrical,
     quaternion,
     rotor_aero,
+    sensors,
     wind,
 )
 from skyflow_dynamics.spec.frames import EZ
@@ -355,3 +356,38 @@ def test_quaternion_norm_correction_dynamics():
     q_unit = sp.Matrix([1, 1, 1, 1]) / 2
     residual = quaternion.kinematics_norm_corrected(q_unit, w, K) - quaternion.kinematics(q_unit, w)
     assert sp.simplify(residual) == sp.zeros(4, 1)
+
+
+# ---------------- IMU stochastic errors ----------------
+
+
+def test_imu_bias_gauss_markov_is_exact_ou_discretization():
+    # The step must be the exact solution of ḃ = −b/τ + σ_b·ẇ over dt.
+    b0, w0 = sp.Symbol("b0", real=True), sp.Symbol("w0", real=True)
+    tau, sigma_b, dt = sp.symbols("tau sigma_b dt_", positive=True)
+    step = sensors.imu_bias_gauss_markov_step(
+        sp.Matrix([b0]), tau, sigma_b, dt, sp.Matrix([w0]))[0]
+    phi, sig_d = step.coeff(b0), step.coeff(w0)
+    # Mean propagation is the exact exponential transition.
+    assert sp.simplify(phi - sp.exp(-dt / tau)) == 0
+    # The stationary variance σ_b²τ/2 is a fixed point of Var⁺ = φ²·Var + σ_d².
+    var_stat = sigma_b**2 * tau / 2
+    assert sp.simplify(phi**2 * var_stat + sig_d**2 - var_stat) == 0
+    # τ→∞ recovers the pure random walk; dt→∞ saturates at the stationary variance.
+    assert sp.limit(sig_d**2, tau, sp.oo) == sigma_b**2 * dt
+    assert sp.limit(sig_d**2, dt, sp.oo) == var_stat
+    # Small-dt leading order is the random walk again: σ_d² = σ_b²·dt + O(dt²).
+    assert sp.series(sig_d**2, dt, 0, 2).removeO() == sigma_b**2 * dt
+
+
+def test_imu_corruption_integrating_sampler_scaling():
+    # Discrete white-noise variance is σ_nd²/dt: halving dt doubles the variance,
+    # and the zero-noise, zero-bias measurement is exact.
+    y, bias, b_on, n = sp.symbols("y bias b_on n", real=True)
+    sigma_nd, dt = sp.symbols("sigma_nd dt_", positive=True)
+    meas = sensors.imu_corrupt(sp.Matrix([y]), sp.Matrix([bias]), sp.Matrix([b_on]),
+                               sigma_nd, dt, sp.Matrix([n]))[0]
+    noise_gain = meas.coeff(n)
+    assert sp.simplify(noise_gain**2 - sigma_nd**2 / dt) == 0
+    assert sp.simplify(noise_gain.subs(dt, dt / 2)**2 - 2 * sigma_nd**2 / dt) == 0
+    assert sp.simplify(meas.subs({bias: 0, b_on: 0, n: 0}) - y) == 0

@@ -37,7 +37,7 @@ Rigid-body translational + rotational EOM with full inertia matrix.
 
 - **Defined in:** `spec.rigid_body.translational, spec.rigid_body.rotational`
 - **Parameters:** `mass`, `grav`, `inertia`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
 - **Tests:** `properties/test_rigid_body.py`, `properties/test_golden.py`
 
 ### `quaternion_kinematics` — **verified**
@@ -45,7 +45,7 @@ Rigid-body translational + rotational EOM with full inertia matrix.
 q̇ = ½ q ⊗ (0, ω); wxyz scalar-first Hamilton, body→world.
 
 - **Defined in:** `spec.quaternion.kinematics`
-- **Sources:** Graf — Quaternions and Dynamics (quaternion kinematics); Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Graf — Quaternions and Dynamics (quaternion kinematics); Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy
 - **Tests:** `properties/test_quaternion.py`
 - **Notes:** Unit norm preserved exactly by the continuous equation; discrete integrators renormalize post-step (harness).
 
@@ -58,7 +58,7 @@ q̇ = ½ q ⊗ (0, ω); wxyz scalar-first Hamilton, body→world.
 
 - **Defined in:** `spec.motor.first_order_lag`
 - **Parameters:** `tau_m`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Förster — System Identification of the Crazyflie 2.0 Nano Quadrocopter, ETH Zürich, 2015
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Förster — System Identification of the Crazyflie 2.0 Nano Quadrocopter, ETH Zürich, 2015
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
 
 ### `motor_asymmetric_lag` — **verified**
@@ -67,9 +67,9 @@ Separate spin-up/spin-down linear+quadratic rates.
 
 - **Defined in:** `spec.motor.asymmetric_lag`
 - **Parameters:** `ka1`, `ka2`, `kd1`, `kd2`
-- **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml
+- **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
-- **Notes:** Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces to first-order at (1/τ, 0, 1/τ, 0).
+- **Notes:** Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces to first-order at (1/τ, 0, 1/τ, 0). RotorS/PX4's FirstOrderFilter is the pure-exponential special case (ka2 = kd2 = 0).
 
 ### `throttle_curve` — **verified**
 
@@ -143,7 +143,7 @@ T_i = ct0 + ct1·Ω + ct2·Ω² per rotor (per-rotor coefficient asymmetry suppo
 
 - **Defined in:** `spec.rotor_aero.thrust_magnitude`
 - **Parameters:** `ct0`, `ct1`, `ct2`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
 - **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
 - **Notes:** Crazyflow identifies RPM-unit polynomials; SkyDreamer's k_w is mass-normalized (multiply by m; finding F-4).
 
@@ -153,7 +153,7 @@ Q_i = cq0 + cq1·Ω + cq2·Ω²; yaw torque on airframe = −s_i·Q_i·ê_i (opp
 
 - **Defined in:** `spec.rotor_aero.torque_magnitude`
 - **Parameters:** `cq0`, `cq1`, `cq2`, `spin`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml
 - **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
 - **Notes:** ⚠ RotorPy's rotor_directions = torque sign = −spin (finding F-6).
 
@@ -163,8 +163,9 @@ Per-rotor unit thrust axis ê_i ≠ ẑ from assembly tolerance → parasitic fo
 
 - **Defined in:** `spec.wrench.body_wrench`
 - **Parameters:** `axis`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
-- **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
+- **Sources:** Hamandi, Usai, Sablé, Staub, Tognon, Franchi — Design of Multirotor Aerial Vehicles: a Taxonomy Based on Input Allocation, IJRR 40(8-9):1015-1044, 2021, doi 10.1177/02783649211025998, Eq. (1) (per-rotor arbitrary unit thrust axis; equation verified from the open-access HAL PDF hal-02433405v2)
+- **Tests:** `properties/test_wrench.py`
+- **Notes:** General per-rotor axis form per Hamandi Eq. (1). No executed reference models assembly tilt directly; verified by exact hand-computed wrench tests (test_wrench.py) — pure geometry, zero numerical slack.
 
 ### `rotor_inertia_moments` — **verified**
 
@@ -172,7 +173,7 @@ Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ.
 
 - **Defined in:** `spec.wrench.rotor_inertia_moment`
 - **Parameters:** `I_rot`, `spin`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py; Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
+- **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py; Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
 - **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`, `properties/test_golden_flightning.py`
 - **Notes:** Signs re-derived from τ = −d/dt(h). Crazyflow's gyro roll-row sign was flipped (finding F-3, confirmed against their running code); fixed upstream by learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden vectors now cross-validate this term. flightning implements ONLY the yaw-reaction half (+I_m·Σ dir_i·Ω̇_i·ẑ with dir_i = −s_i ≡ this term at ω = 0, executed-code verified) with the continuous rate Ω̇ = (Ω_c−Ω)/τ; it omits the −ω×h precession.
 
@@ -182,7 +183,7 @@ H_i = −Ω_i·diag(k_d,k_d,k_z)·v_i at each hub, v_i incl. ω×r_i lever arm.
 
 - **Defined in:** `spec.rotor_aero.rotor_drag_force`
 - **Parameters:** `k_d`, `k_z`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012; SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py
 - **Tests:** `properties/test_energy.py`, `properties/test_golden.py`
 - **Notes:** SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4).
 
@@ -192,7 +193,7 @@ M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k
 
 - **Defined in:** `spec.rotor_aero.flapping_moment`
 - **Parameters:** `k_flap`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
 - **Tests:** `properties/test_wrench.py`, `properties/test_golden.py`
 
 ### `translational_lift` — **verified**
@@ -201,7 +202,7 @@ M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k
 
 - **Defined in:** `spec.rotor_aero.translational_lift`
 - **Parameters:** `k_h`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork); Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy; Foehn et al. — Agilicious (Science Robotics 2022) agilib simulator, GPLv3; evaluated via public mirror alibabasomeone/agilicious_internal_mine at commit ba8caa7 — BEM/model sources byte-identical to the RPG init commit 2d78b81 (Foehn, 2022-06-22); golden vectors from the EXECUTED compiled agilib (golden/generate/gen_agilicious.py)
 - **Tests:** `properties/test_golden.py`, `properties/test_golden_agilicious.py`
 - **Notes:** Also executed as agilib ModelLinCubDrag's induced_lift_coeff (2026-08-19). Small-airspeed linearization of the AoA/advance-ratio model — mutually exclusive with k_angle/k_hor (validation rule).
 
@@ -292,7 +293,7 @@ T = C_T(J)·ρ·n²·D⁴, P = C_P(J)·ρ·n³·D⁵ with measured tables; windm
 Per-rotor rolling moment −Ω·s·μ_R·v_⊥ (advancing/retreating dissymmetry).
 
 - **Defined in:** `spec.rotor_aero.rolling_moment`
-- **Sources:** ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
+- **Sources:** ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults); Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
 - **Tests:** `properties/test_candidates.py`
 - **Notes:** RotorS omits the spin sign (bug); PX4 variant adopted. Cancels for balanced pairs.
 
@@ -387,7 +388,7 @@ D = −‖v_a‖·diag(c_D)·v_a at CoM.
 
 - **Defined in:** `spec.rotor_aero.parasitic_drag`
 - **Parameters:** `c_D`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy
 - **Tests:** `properties/test_energy.py`, `properties/test_golden.py`
 - **Notes:** ⚠ ‖v‖-scaled, NOT per-axis |v_k|·v_k (SkyDreamer's form) — structurally different; don't transplant coefficients between the two.
 
@@ -447,9 +448,18 @@ Turbulent-jet wake velocity field + frame drag + per-rotor thrust loss.
 Specific force + body rate at offset/rotated mount, lever-arm terms in body frame.
 
 - **Defined in:** `spec.sensors.imu`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Titterton & Weston — Strapdown Inertial Navigation Technology, 2nd ed., IEE Radar, Sonar and Navigation Series 17 / AIAA, 2004, doi 10.1049/PBRA017E — the standard reference for strapdown specific-force measurement and lever-arm ('size effect') compensation. Book text not directly consulted: the spec's IMU model is derived from rigid-body kinematics and proven against an independent closed-form reference (test_sensors.py)
 - **Tests:** `properties/test_sensors.py`
-- **Notes:** Frame-mixing defects F-1/F-2 found and fixed in the reference; equations here are the corrected form.
+- **Notes:** Derived from rigid-body kinematics: a_S = a_B + α×r + ω×(ω×r) with all lever-arm quantities in the body frame, rotated once; proven against an independent closed-form model in test_sensors.py. Upstream rotorpy's IMU mixes frames (findings F-1/F-2, see REFERENCES.md) and is not usable as a reference.
+
+### `imu_stochastic_errors` — *candidate*
+
+Per-axis IMU corruption: exact-discretized Gauss–Markov bias + white noise + turn-on bias.
+
+- **Defined in:** `spec.sensors.imu_bias_gauss_markov_step + spec.sensors.imu_corrupt`
+- **Sources:** ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)
+- **Tests:** `properties/test_candidates.py`
+- **Notes:** b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. Exact OU discretization (Maybeck Vol. 1 Eq. 4-114, as cited in gazebo_imu_plugin.cpp; book not directly consulted — exactness proven symbolically instead). Unit-normal draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero rather than the stationary σ_b²τ/2 (their own TODO).
 
 
 ## Discretization
@@ -460,16 +470,16 @@ Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the 
 
 - **Defined in:** `spec.motor.exact_exp_step`
 - **Parameters:** `tau_m`
-- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28)
-- **Tests:** `properties/test_motor.py`, `properties/test_golden.py`, `properties/test_golden_flightning.py`
-- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only. Verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py ((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail).
+- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28); ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)
+- **Tests:** `properties/test_motor.py`, `properties/test_golden_flightning.py`
+- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only. Exactness proven symbolically against the lag ODE (test_motor.py); verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py ((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail); also RotorS' FirstOrderFilter.
 
 ### `rk4_fixed_step` — **verified**
 
 Classical RK4; the differentiable reference integrator (adaptive solvers are not cleanly differentiable).
 
 - **Defined in:** `spec.discretization.rk4_step`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy
 - **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
 - **Notes:** flightning attribution removed 2026-08-19: its executed integrator is explicit Euler at 1 kHz (exact attitude/motor substeps), no RK4 anywhere in the repo.
 
@@ -573,13 +583,13 @@ Controller decides at a lower rate than physics; command zero-order-held between
 Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not contact physics.
 
 - **Defined in:** `(harness — no symbolic form)`
-- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork)
+- **Sources:** Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy
 - **Notes:** Do not port as physics; a real contact model would be a new candidate.
 
 
 ## Sources
 
-- **rotorpy**: Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation branch research-additions (Synetic-Labs/rotorpy fork) — <https://github.com/Synetic-Labs/rotorpy>
+- **rotorpy**: Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator with Aerodynamics for Education and Research (arXiv:2306.04485); reference implementation github.com/spencerfolk/rotorpy — <https://github.com/spencerfolk/rotorpy>
 - **mahony2012**: Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, Estimation, and Control of Quadrotor, IEEE RAM 2012
 - **crazyflow**: Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml — <https://github.com/learnsyslab/crazyflow>
 - **skydreamer**: SkyDreamer (arXiv:2510.14783) + reference implementation embodied/envs/skydreamer.py — <https://github.com/The-Real-Thisas/dreamerv3>
@@ -599,7 +609,9 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 - **jain2019**: Jain, Fortmuller, Byun, Makiharju, Mueller — Modeling of aerodynamic disturbances for proximity flight of multirotors, ICUAS 2019, Eqs. (1)-(8)
 - **bangura**: Bangura & Mahony (ACRA 2012, Eqs. 6-11); Bangura, Lim, Kim, Mahony (ICRA 2014, Eqs. 3-15); Bangura et al. — Aerodynamics of Rotor Blades for Quadrotors (arXiv:1601.00733)
 - **kai2017**: Kai, Allibert, Hua, Hamel — Nonlinear feedback control of quadrotors exploiting first-order drag effects, IFAC World Congress 2017, Eqs. (6)-(13)
-- **rotors_px4**: ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment) — <https://github.com/ethz-asl/rotors_simulator>
+- **rotors_px4**: ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults) — <https://github.com/ethz-asl/rotors_simulator>
+- **hamandi2021**: Hamandi, Usai, Sablé, Staub, Tognon, Franchi — Design of Multirotor Aerial Vehicles: a Taxonomy Based on Input Allocation, IJRR 40(8-9):1015-1044, 2021, doi 10.1177/02783649211025998, Eq. (1) (per-rotor arbitrary unit thrust axis; equation verified from the open-access HAL PDF hal-02433405v2) — <https://hal.science/hal-02433405>
+- **titterton2004**: Titterton & Weston — Strapdown Inertial Navigation Technology, 2nd ed., IEE Radar, Sonar and Navigation Series 17 / AIAA, 2004, doi 10.1049/PBRA017E — the standard reference for strapdown specific-force measurement and lever-arm ('size effect') compensation. Book text not directly consulted: the spec's IMU model is derived from rigid-body kinematics and proven against an independent closed-form reference (test_sensors.py)
 - **chen2006**: Chen & Rincon-Mora — Accurate Electrical Battery Model Capable of Predicting Runtime and I-V Performance, IEEE Trans. Energy Conversion 21(2), 2006
 - **crazyflie_fw**: bitcraze/crazyflie-firmware — motors.c motorsCompensateBatteryVoltage + platform_defaults_cf2.h (master and tag 2022.01) — <https://github.com/bitcraze/crazyflie-firmware>
 - **gazebo_battery**: gazebosim/gz-sim LinearBatteryPlugin.cc (linear OCV + internal resistance + current low-pass) — <https://github.com/gazebosim/gz-sim>

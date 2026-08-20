@@ -1,9 +1,11 @@
 """
-Sensor measurement models (deterministic part).
+Sensor measurement models.
 
-Noise processes (white noise density, bias random walks, artifact spikes) and sample-rate /
-zero-order-hold behavior are harness-side; the math here is the exact measurement given the
-true state and its derivative.
+The deterministic part is the exact measurement given the true state and its derivative.
+For the stochastic error processes, the spec carries the exact propagation equations and
+noise-scaling conventions (the class of math where scaling bugs hide — cf. the Dryden
+√(π/dt) findings); the unit-normal draws themselves, the once-per-power-up turn-on-bias
+draw, sample-rate / zero-order-hold behavior, and artifact spikes are harness-side.
 """
 
 import sympy as sp
@@ -32,3 +34,35 @@ def imu(q: sp.Matrix, v_dot: sp.Matrix, w: sp.Matrix, w_dot: sp.Matrix,
     accel = R_BS.T * R_WB.T * (a_sensor_world - gravity_world(grav))
     gyro = R_BS.T * w
     return accel, gyro
+
+
+def imu_bias_gauss_markov_step(b: sp.Matrix, tau: sp.Expr, sigma_b: sp.Expr,
+                               dt: sp.Expr, w: sp.Matrix) -> sp.Matrix:
+    """
+    Exact one-step update of a first-order Gauss–Markov (Ornstein–Uhlenbeck) sensor bias
+    ḃ = −b/τ + σ_b·ẇ, driven by a unit-normal sample vector w (harness-side draw):
+
+        b⁺ = e^(−dt/τ) · b  +  σ_b · √( (τ/2) · (1 − e^(−2·dt/τ)) ) · w
+
+    Transition and driving standard deviation are the exact discretization of the OU
+    process (Maybeck Vol. 1, Eq. 4-114, as cited by the RotorS implementation).
+    Limits: stationary variance σ_b²·τ/2 as dt→∞; pure random walk σ_b·√dt as τ→∞.
+    """
+    phi = sp.exp(-dt / tau)
+    sigma_d = sigma_b * sp.sqrt(tau / 2 * (1 - sp.exp(-2 * dt / tau)))
+    return phi * b + sigma_d * w
+
+
+def imu_corrupt(y_true: sp.Matrix, b: sp.Matrix, b_on: sp.Matrix,
+                sigma_nd: sp.Expr, dt: sp.Expr, n: sp.Matrix) -> sp.Matrix:
+    """
+    Additive measurement corruption for one sensor triad:
+
+        y = y_true + b + b_on + (σ_nd/√dt) · n
+
+    σ_nd is the continuous noise density ([unit]/√Hz); σ_nd/√dt is the discrete standard
+    deviation of an integrating sampler over dt. b is the Gauss–Markov bias state, b_on
+    the turn-on bias (drawn once at power-up), n a unit-normal sample vector — both draws
+    harness-side.
+    """
+    return y_true + b + b_on + sigma_nd / sp.sqrt(dt) * n
