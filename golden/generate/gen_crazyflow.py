@@ -91,7 +91,9 @@ def import_crazyflow_dynamics(root: pathlib.Path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--crazyflow", default="/home/james/CODE/crazyflow-fork")
+    ap.add_argument("--crazyflow", required=True,
+                    help="path to a crazyflow checkout (Synetic-Labs/crazyflow, "
+                         "at/after learnsyslab PR #86)")
     ap.add_argument("--drone", default="cf2x_L250")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()

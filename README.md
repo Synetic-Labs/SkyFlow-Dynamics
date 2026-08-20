@@ -103,11 +103,13 @@ Each generator pins its source (commit hash / file sha256 recorded in the JSON p
 cd ../rotorpy && uv run --extra all python \
     ../SkyFlow-Dynamics/golden/generate/gen_rotorpy.py --out ../SkyFlow-Dynamics/golden/vectors
 
-# Crazyflow (bare-package shim over the local fork):
-uv run --with scipy --with array-api-compat python golden/generate/gen_crazyflow.py --out golden/vectors
+# Crazyflow (bare-package shim over a checkout of Synetic-Labs/crazyflow):
+uv run --with scipy --with array-api-compat python golden/generate/gen_crazyflow.py \
+    --crazyflow /path/to/crazyflow --out golden/vectors
 
 # SkyDreamer (execs their literal dynamics source, njit stubbed):
-uv run python golden/generate/gen_skydreamer.py --out golden/vectors
+uv run python golden/generate/gen_skydreamer.py \
+    --skydreamer /path/to/dreamerv3/embodied/envs/skydreamer.py --out golden/vectors
 
 # JSBSim (runs the official PyPI wheel — the actual C++ engine — on custom minimal
 # testbeds; every family self-checks its transcription against the executed values):

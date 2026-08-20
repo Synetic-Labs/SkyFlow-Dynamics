@@ -557,7 +557,7 @@
  "schema": 1,
  "provenance": {
   "generator": "golden/generate/gen_rotorpy.py",
-  "source": "RotorPy (spencerfolk/rotorpy) \u2014 Multirotor NumPy dynamics, canonical path",
+  "source": "RotorPy (Synetic-Labs/rotorpy fork of spencerfolk/rotorpy) \u2014 Multirotor NumPy dynamics, canonical path",
   "source_branch": "research-additions",
   "source_commit": "68c3d267d4b9e47635e871640d9415e6c62e74d9",
   "date": "2026-08-10",

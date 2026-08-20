@@ -1,7 +1,7 @@
 """
 Check-data freezer: NASA CR-1998-206937 Dryden turbulence statistics (pinned document).
 
-⚠ ARCHAIC-SOURCE EXCEPTION (approved 2026-08-11): unlike the other generators, this one
+⚠ ARCHAIC-SOURCE EXCEPTION (2026-08-11): unlike the other generators, this one
 does not execute reference code. The reference is a pinned NASA contractor report whose
 GUSTMDL test program is printed in full but written in ACSL — a discontinued commercial
 simulation language with no runnable interpreter today — and driven by ACSL's internal

@@ -10,10 +10,10 @@
  "tolerance": 2e-05,
  "provenance": {
   "generator": "golden/generate/gen_skydreamer.py",
-  "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit \u2014 literal source exec'd with njit stubbed; dynamics block diff-verified identical to The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py (ENU)",
-  "source_file": "/home/james/CODE/nav-jax/sims/skydreamer/skydreamer.py",
-  "source_sha256": "761f133c42c798d5f20679e7a28d5f5813c5e8293d8c5e0ffaffd0cd1bed51f3",
-  "date": "2026-08-10",
+  "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit \u2014 literal source exec'd with njit stubbed; embodied/envs/skydreamer.py from The-Real-Thisas/dreamerv3 (ENU)",
+  "source_file": "skydreamer.py",
+  "source_sha256": "04de61c5a872b8c610dc0ba11018c7cdf1b9b6b9fd8744c0f502ae4eabc235aa",
+  "date": "2026-08-19",
   "notes": "Force side + rotor lag only. Moments are per-rotor identified k_p/k_q/k_r (not structural r x F) \u2014 not comparable. Per-axis quadratic drag (k_x2/k_y2) zeroed: different model than |v|-scaled parasitic drag. Coefficients mass-scaled per finding F-4; rotor states denormalized from [-1,1] over [0,3000] rad/s."
  },
  "params": {

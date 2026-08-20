@@ -40,7 +40,8 @@ class Term:
 SOURCES = {s.key: s for s in [
     Source("rotorpy", "Folk, Paulos, Kumar — RotorPy: a Python-based Multirotor Simulator "
            "with Aerodynamics for Education and Research (arXiv:2306.04485); reference "
-           "implementation branch research-additions", "https://github.com/spencerfolk/rotorpy"),
+           "implementation branch research-additions (Synetic-Labs/rotorpy fork)",
+           "https://github.com/Synetic-Labs/rotorpy"),
     Source("mahony2012", "Mahony, Kumar, Corke — Multirotor Aerial Vehicles: Modeling, "
            "Estimation, and Control of Quadrotor, IEEE RAM 2012"),
     Source("crazyflow", "Crazyflow first-principles dynamics "

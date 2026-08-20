@@ -1,5 +1,5 @@
 """
-Golden-vector generator: RotorPy (branch research-additions).
+Golden-vector generator: RotorPy (Synetic-Labs/rotorpy fork, branch research-additions).
 
 Run from the RotorPy repo root (its venv has numpy/scipy):
 
@@ -165,7 +165,8 @@ def main():
                             capture_output=True, text=True, check=False).stdout.strip()
     provenance = {
         "generator": "golden/generate/gen_rotorpy.py",
-        "source": "RotorPy (spencerfolk/rotorpy) — Multirotor NumPy dynamics, canonical path",
+        "source": "RotorPy (Synetic-Labs/rotorpy fork of spencerfolk/rotorpy) — Multirotor "
+                  "NumPy dynamics, canonical path",
         "source_branch": branch, "source_commit": commit,
         "date": datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
         "conventions": "converted to SkyFlow canonical: quaternion wxyz, spin=-rotor_directions,"

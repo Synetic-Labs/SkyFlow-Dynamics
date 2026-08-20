@@ -1,12 +1,13 @@
 """
 Golden-vector generator: SkyDreamer identified dynamics (compute_dynamics_jit).
 
-Executes the ACTUAL SkyDreamer dynamics source (a copy of embodied/envs/skydreamer.py) by
-slicing the @njit function block out of the file and exec'ing it with a no-op njit stub —
-their literal code, no numba required:
+Executes the ACTUAL SkyDreamer dynamics source (embodied/envs/skydreamer.py from the released
+reference implementation, github.com/The-Real-Thisas/dreamerv3) by slicing the @njit function
+block out of the file and exec'ing it with a no-op njit stub — their literal code, no numba
+required:
 
     uv run python golden/generate/gen_skydreamer.py \
-        --skydreamer /path/to/skydreamer.py --out golden/vectors
+        --skydreamer /path/to/dreamerv3/embodied/envs/skydreamer.py --out golden/vectors
 
 Scope (structural, documented):
   Only the FORCE side and rotor dynamics are comparable. SkyDreamer's moments are per-rotor
@@ -22,9 +23,8 @@ w_n ∈ [−1,1] over [0, 3000] rad/s: Ω = (w_n+1)/2·3000, Ω̇ = ẇ_n·1500.
 already scalar-first wxyz. Zero action a = 0 maps to throttle U = (a+1)/2 = 0.5, so the
 commanded speed is throttle_curve(0.5) ≈ 2030.8 rad/s (a = −1 would give w_min).
 
-Provenance: the local file's compute_dynamics_jit block was diff-verified identical (modulo a
-shortened docstring) to The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py — the released
-reference implementation, which declares ENU explicitly.
+Provenance: the reference implementation declares ENU explicitly; the exact source file used
+is pinned by the sha256 recorded in the vector's provenance block.
 """
 
 import argparse
@@ -64,7 +64,9 @@ PARAM_KEYS = ["k_x", "k_y", "k_w", "k_x2", "k_y2", "k_angle", "k_hor", "k_v2",
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skydreamer", default="/home/james/CODE/nav-jax/sims/skydreamer/skydreamer.py")
+    ap.add_argument("--skydreamer", required=True,
+                    help="path to embodied/envs/skydreamer.py from "
+                         "github.com/The-Real-Thisas/dreamerv3")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     path = pathlib.Path(args.skydreamer)
@@ -133,9 +135,9 @@ def main():
         "provenance": {
             "generator": "golden/generate/gen_skydreamer.py",
             "source": "SkyDreamer (arXiv:2510.14783) compute_dynamics_jit — literal source "
-                      "exec'd with njit stubbed; dynamics block diff-verified identical to "
-                      "The-Real-Thisas/dreamerv3 embodied/envs/skydreamer.py (ENU)",
-            "source_file": str(path),
+                      "exec'd with njit stubbed; embodied/envs/skydreamer.py from "
+                      "The-Real-Thisas/dreamerv3 (ENU)",
+            "source_file": path.name,
             "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             "date": datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
             "notes": "Force side + rotor lag only. Moments are per-rotor identified k_p/k_q/k_r "
