@@ -608,7 +608,7 @@ TERMS = (
     # ---------------- candidates: sensors ----------------
     Term("imu_stochastic_errors", "candidate", "sensor",
          "Per-axis IMU corruption: exact-discretized Gauss–Markov bias + white noise + turn-on bias",
-         "spec.sensors.imu_bias_gauss_markov_step + spec.sensors.imu_corrupt",
+         "spec.sensors.imu_bias_gauss_markov_step, spec.sensors.imu_corrupt",
          ("rotors_px4",), (),
          ("properties/test_candidates.py",),
          "b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. "
