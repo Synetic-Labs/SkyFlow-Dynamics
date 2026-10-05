@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from skyflow_dynamics.spec.registry import EXCLUSIONS, SOURCES, TERMS
+from skyflow_dynamics.spec.registry import DECISIONS, EXCLUSIONS, SOURCES, TERMS
 
 DOMAIN_TITLES = {
     "rigid_body": "Rigid body",
@@ -52,9 +52,15 @@ q̇ = ½·q ⊗ (0, ω)        ω̇ = I⁻¹(M_B + τ_ext − ω×(I·ω))
 Ω̇ = motor model          (first-order lag or asymmetric spin-up/down)
 ```
 
-Tier legend: **verified** = golden-tested against a reference implementation's running code;
-*candidate* = published model, symbolically checked and cited, awaiting numeric validation.
+Tier legend: **verified** = reproduces an independent reference (evidence: executed code,
+published reference data, measured data, or an exact analytic check); *candidate* = published
+model, symbolically checked and cited, awaiting numeric validation; *proposed* = known effect
+with provenance, no spec expression yet. **Use**: `backend` = emitted by
+`skyflow_dynamics/backends/jax.py`; `spec` = math only. Terms not yet verified-and-in-backend
+carry a next-step decision — see [Backlog](#backlog) and [INTAKE.md](../INTAKE.md).
 """
+
+BADGE = {"verified": "**verified**", "candidate": "*candidate*", "proposed": "*proposed*"}
 
 
 def main():
@@ -68,19 +74,45 @@ def main():
             continue
         lines.append(f"\n## {title}\n")
         for t in domains[domain]:
-            badge = "**verified**" if t.tier == "verified" else "*candidate*"
-            lines.append(f"### `{t.key}` — {badge}\n")
+            lines.append(f"### `{t.key}` — {BADGE[t.tier]}\n")
             lines.append(f"{t.summary}.\n")
-            lines.append(f"- **Defined in:** `{t.expression}`")
+            if t.expression:
+                lines.append(f"- **Defined in:** `{t.expression}`")
+            else:
+                lines.append("- **Defined in:** — (proposed: no spec expression yet)")
             if t.parameters:
                 lines.append(f"- **Parameters:** {', '.join(f'`{p}`' for p in t.parameters)}")
             cites = "; ".join(SOURCES[s].citation for s in t.sources)
             lines.append(f"- **Sources:** {cites}")
             if t.tests:
                 lines.append(f"- **Tests:** {', '.join(f'`{x}`' for x in t.tests)}")
+            if t.domain != "harness":
+                ev = ", ".join(t.evidence) or "none yet"
+                lines.append(f"- **Evidence:** {ev} · **Use:** `{t.use}`")
+            if t.ledger:
+                lines.append(f"- **Decision:** {t.decision}")
+                if t.revisit:
+                    lines.append(f"- **Revisit when:** {t.revisit}")
+                if t.effect:
+                    lines.append(f"- **Effect:** {t.effect}")
             if t.notes:
                 lines.append(f"- **Notes:** {t.notes}")
             lines.append("")
+
+    lines.append("\n## Backlog\n")
+    lines.append("Every term short of verified-and-in-backend, by decision (INTAKE.md: "
+                 "*pursue* = do now, *defer* = wait for the revisit condition, *hold* = no "
+                 "next step planned, *open* = not triaged yet).\n")
+    for decision in ("pursue", "defer", "hold", "open"):
+        rows = [t for t in TERMS if t.ledger and t.decision == decision]
+        if not rows:
+            continue
+        lines.append(f"\n### {decision} ({len(rows)})\n")
+        lines.append("| term | tier | use | revisit when |")
+        lines.append("|---|---|---|---|")
+        for t in rows:
+            lines.append(f"| `{t.key}` | {t.tier} | {t.use} | {t.revisit or '—'} |")
+    assert set(DECISIONS) == {"pursue", "defer", "hold", "open"}
 
     lines.append("\n## Sources\n")
     for s in SOURCES.values():
@@ -96,9 +128,10 @@ def main():
     out = pathlib.Path(__file__).resolve().parent.parent / "docs" / "equations.md"
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(lines))
-    n_v = sum(1 for t in TERMS if t.tier == "verified")
-    n_c = sum(1 for t in TERMS if t.tier == "candidate")
-    print(f"wrote {out} ({n_v} verified, {n_c} candidate terms)")
+    n = {tier: sum(1 for t in TERMS if t.tier == tier) for tier in BADGE}
+    n_b = sum(1 for t in TERMS if t.use == "backend")
+    print(f"wrote {out} ({n['verified']} verified, {n['candidate']} candidate, "
+          f"{n['proposed']} proposed terms; {n_b} in the backend)")
 
 
 if __name__ == "__main__":

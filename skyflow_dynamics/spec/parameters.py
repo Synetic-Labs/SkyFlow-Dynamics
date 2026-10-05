@@ -114,3 +114,44 @@ CRAZYFLIE = {
     # Harness-side operating limits (not part of the continuous dynamics):
     "limits": {"rotor_speed_min": 0.0, "rotor_speed_max": 2500.0},
 }
+
+
+#: 5-inch racer reference vehicle: the UZH-RPG Kingfisher, the NeuroBEM / Agilicious platform
+#: (Armattan Chameleon 6" frame, 2306 motors, 5.1" three-blade props, Jetson TX2 on board;
+#: Bauersfeld et al., NeuroBEM, RSS 2021; Foehn et al., Agilicious, Sci. Robot. 2022). One
+#: platform, every value traced to it (frozen in golden/checkdata/neurobem_racer.json):
+#: - MEASURED, tools/identify_neurobem.py on the public NeuroBEM flight data (force fit,
+#:   95 % bootstrap over 234 training segments; held-out force RMSE 0.557 N horizontal,
+#:   1.128 N vertical on the authors' 13 test segments): c_T 1.584e-6 [1.570, 1.597],
+#:   k_d 4.49e-5 [4.24, 4.75], c_Dz 0.0213 [0.0185, 0.0235]. Horizontal frame drag fits to
+#:   zero (its interval spans 0): rotor drag explains it. Mass 0.772 kg: the dataset labels.
+#: - DERIVED from the verified BEM family (tools/bem_rate_damping.py, canonical hub velocity,
+#:   F-24/F-29): k_z 3.835e-5, the value whose lever-arm roll damping 4·Ω_h·k_z·a² equals
+#:   BEM's at 13 rad/s, the largest body rate in the flight data. Valid near that rate: BEM
+#:   stiffens with rate (registry rotor_rate_damping_nonlinear). k_z is not separable from
+#:   c_Dz in the force data.
+#: - SOURCE CONFIG, agilib kingfisher.yaml / sim_kingfisher.yaml: inertia, c_Q 1.909e-8 (BEM
+#:   gives 1.85e-8), τ_m 33 ms, I_rot 9.3575e-6 kg·m², prop radius 6.477 cm, rotor speed
+#:   floor 150 rad/s, and the 8.5 N per-motor thrust cap → rotor speed ceiling √(8.5/c_T).
+#:   Torque terms are not fitted: the flight data's moments do not close (F-30).
+#: - Geometry: symmetric X, 0.13 m arm (setupKingfisher.m in the dataset code). Rotor order
+#:   FL, FR, RR, RL; FR and RL spin counter-clockwise.
+_A5 = 0.13 / math.sqrt(2)
+_CT5 = 1.5837612920467833e-06
+RACER_5IN = {
+    "mass": 0.772, "grav": 9.81,
+    "inertia": [[0.0025, 0.0, 0.0], [0.0, 0.0021, 0.0], [0.0, 0.0, 0.0043]],
+    "rotor_pos": [[_A5, _A5, 0.0], [_A5, -_A5, 0.0], [-_A5, -_A5, 0.0], [-_A5, _A5, 0.0]],
+    "spin": [-1, 1, -1, 1],
+    "axis": [[0.0, 0.0, 1.0]] * 4,
+    "ct0": [0.0] * 4, "ct1": [0.0] * 4, "ct2": [_CT5] * 4,
+    "cq0": [0.0] * 4, "cq1": [0.0] * 4, "cq2": [1.908873e-08] * 4,
+    "tau_m": 0.033, "ka1": 0.0, "ka2": 0.0, "kd1": 0.0, "kd2": 0.0,
+    "I_rot": 9.3575e-06,
+    "c_D": [0.0, 0.0, 0.021279309271892116],
+    "c_L": [0.0, 0.0, 0.0],
+    "k_d": 4.488865677888165e-05, "k_z": 3.835023444869122e-05, "k_flap": 0.0, "k_h": 0.0,
+    "k_angle": 0.0, "k_hor": 0.0, "k_v2": 0.0, "r_prop": 0.06477,
+    # Harness-side operating limits (not part of the continuous dynamics):
+    "limits": {"rotor_speed_min": 150.0, "rotor_speed_max": math.sqrt(8.5 / _CT5)},
+}

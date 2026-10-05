@@ -1,5 +1,5 @@
 """Accuracy: symbolic checks for the BEM terms (NeuroBEM / agilicious intake) and the
-frame-drag / integrator terms landed with them — INTAKE step 4."""
+frame-drag / integrator terms landed with them — INTAKE step 5."""
 
 import numpy as np
 import sympy as sp
