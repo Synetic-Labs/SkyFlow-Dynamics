@@ -9,7 +9,7 @@ Python replica of every executed code path (15-point Gauss-Kronrod disk quadratu
 vectorized Brent solver, the float32 fast-atan2, the VRS branch with its ANY-rotor gate, the
 machine-generated flapping fits, and the force/torque composition) is asserted against the
 executed outputs at ≤1e-10 relative — the transcription self-check demanded by INTAKE.md
-step 6. The replica also reconstructs quantities the reference overwrites (the pre-VRS
+step 7. The replica also reconstructs quantities the reference overwrites (the pre-VRS
 momentum-closure root), which are stored with that provenance note.
 
 Reference provenance: public GPLv3 mirror of the RPG agilicious repository. The BEM/model

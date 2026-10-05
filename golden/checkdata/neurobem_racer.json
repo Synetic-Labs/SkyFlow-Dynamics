@@ -1,0 +1,82 @@
+{
+ "kind": "neurobem_racer_identification",
+ "provenance": {
+  "data": "https://download.ifi.uzh.ch/rpg/NeuroBEM/",
+  "sha256": {
+   "processed_data.zip": "a3e2e83d156b48a95c346c4fd9b3ded0b62781331dc613f1cb9ab285be2b36a8",
+   "testset.txt": "d59cd589105cf4cd3fcfe0a34a0b4824d6ae2560db13d34b9a7acd169deeb367"
+  },
+  "stride": 4,
+  "train_segments": 234,
+  "test_segments": 13,
+  "generator": "tools/identify_neurobem.py"
+ },
+ "fixed": {
+  "mass": 0.772,
+  "inertia_diag": [
+   0.0025,
+   0.0021,
+   0.0043
+  ],
+  "arm": 0.13
+ },
+ "k_z_bem": 3.835023444869122e-05,
+ "k_z_rate": 13.0,
+ "force_fit": {
+  "c_T": 1.583761292046783e-06,
+  "k_d": 4.4888656778881804e-05,
+  "c_Dxy": -0.0011095013402647397,
+  "c_Dz": 0.021279309271892075
+ },
+ "ci95": {
+  "c_T": [
+   1.5698450432696148e-06,
+   1.5965062326772236e-06
+  ],
+  "k_d": [
+   4.239042332435474e-05,
+   4.7488410774051455e-05
+  ],
+  "c_Dxy": [
+   -0.002901666532816664,
+   0.0006497774522481506
+  ],
+  "c_Dz": [
+   0.018526541840569174,
+   0.02352299316002334
+  ]
+ },
+ "implied_roll_arm": 0.01422813785554065,
+ "held_out_rmse": {
+  "zero force": {
+   "F_xy": 1.9183116836664762,
+   "F_z": 13.905349394682219
+  },
+  "identified (RACER_5IN)": {
+   "F_xy": 0.5567435073730208,
+   "F_z": 1.128473806460683
+  },
+  "NeuroBEM Table II: BEM": {
+   "F_xy": 0.803,
+   "F_z": 1.265
+  },
+  "NeuroBEM Table II: polynomial fit": {
+   "F_xy": 1.536,
+   "F_z": 1.381
+  }
+ },
+ "envelope": {
+  "body_rate_max": [
+   13.074175171859942,
+   12.739565467850554,
+   3.7955716795539822
+  ],
+  "body_rate_p99": [
+   5.350014956426322,
+   5.364654125616541,
+   1.0813635607911
+  ],
+  "speed_max": 17.69912943102061,
+  "hover_rotor_speed": 1119.758531578871
+ }
+}

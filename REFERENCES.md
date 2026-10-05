@@ -1,7 +1,7 @@
 # Source evaluation record
 
 Every source evaluated for this spec, with the outcome per model — including models we
-rejected and why. This file is the INTAKE.md step-7 ledger: check here before re-evaluating
+rejected and why. This file is the INTAKE.md step-9 record: check here before re-evaluating
 a source. Adopted candidates live in `spec/` with registry entries; "already covered" means
 the math is equivalent (after convention conversion) to a verified term.
 
@@ -461,6 +461,7 @@ Surveyed RotorS (source + firefly xacro), PX4 SITL gazebo-classic (source + head
 - **Parameters:** rho = 1.225 kg/m^3, beta = 1.8e-5 Pa*s in both drone models; box dims derived automatically from each body's mass/inertia.
 - **Relevance:** The translational quadratic term duplicates rotorpy's parasitic quadratic drag, and the linear Stokes force term duplicates the just-added differentiable linear drag. What rotorpy's inventory LACKS is any aerodynamic ANGULAR damping: the quadratic torque g_D,i = -(1/2) rho r_i (r_j^4 + r_k^4) |omega_i| omega_i and linear g_V,i = -8 beta pi r_eq^3 omega_i. A diag-coefficient rotational damping torque -diag(c_R) . (|omega| o omega) - diag(c_r) . omega is cheap, stabilizing for RL/optimization, JAX-trivial, and has this credible provenance.
 - **Notes:** Physical honesty caveat: for a quadrotor most real rotational damping comes from the rotors (already captured by rotor drag with lever arms), so treat c_R, c_r as small fitted residual coefficients, not derived from the inertia-box formula.
+- **Status correction (2026-10-04):** never landed in `spec/` — now registry `angular_body_drag`, tier proposed; see "Findings from use".
 
 ### MuJoCo ellipsoid fluid model (added mass, Magnus, Kutta lift, angular drag) — *skipped*
 
@@ -880,6 +881,81 @@ re-litigates them.
 
 - **Source:** WGS84 / ANSI/AIAA R-004-1992 (transforms); Lowry, Gracey NASA RP-1046 (airspeed); NACA Report 1135 (flow relations); Stevens & Lewis (aero forces/moments); mathworks.com/help/aeroblks/ various.
 - **Relevance:** Frame-boundary machinery (this repo keeps converters at the boundaries — golden generators, future backends), fixed-wing utilities, or generic servo/turbofan models with no multirotor content. `alphabeta`-style incidence quantities already appear inside the AoA thrust terms where needed.
+
+
+## Findings from use (finding-driven intake, INTAKE.md) — 2026-10-04
+
+Found while building SkyFlow's 5-inch racer airframe (Synetic-Labs/SkyFlow 296023e,
+`skyflow.params.RACER_5IN`) and flying it by hand. Each finding is reproduced in this repo
+(`tools/`, `properties/test_findings.py`). This was the first triage under the extended
+INTAKE.md; its decisions are in the registry and the Backlog of docs/equations.md.
+
+### F-29 (BEM body-rate damping stiffens with rate; agilib's F-24 also removes yaw damping) — **new proposed term + triage of 6 existing terms**
+
+- **Method:** `tools/bem_rate_damping.py` runs the float-exact agilib BEM replica
+  (`golden/generate/gen_agilicious.py`, the code path the verified `bem_*` terms reproduce)
+  with the measured 5.1-inch prop of `agilicious_bem.json`, at hover (1117 rad/s; the flight
+  data give 1120), with a pure body rate about one axis. Geometry: the NeuroBEM flight-data
+  platform (0.13 m X arm, 0.772 kg).
+- **Result (canonical hub velocity v + ω×r), damping D = −M/p in N·m·s/rad:**
+
+  | rate rad/s | 1 | 10 | 13 | 50 | 100 | 200 |
+  |---|---|---|---|---|---|---|
+  | roll | 0.00086 | 0.00132 | 0.00145 | 0.00220 | 0.00226 | 0.00402 |
+  | pitch | 0.00169 | 0.00214 | 0.00227 | 0.00302 | 0.00308 | 0.00484 |
+  | yaw | 0.00308 | 0.00308 | 0.00309 | 0.00316 | 0.00334 | 0.00371 |
+
+- **Stiffening:** roll damping rises 4.7× from 1 to 200 rad/s. A linear lever-arm term
+  (the backend's `rotor_drag_hforce` k_z channel, 4·Ω·k_z·a²) set to BEM at 13 rad/s is
+  1.69× / 1.10× / 0.66× / 0.36× of BEM at 1 / 10 / 50 / 200 rad/s.
+- **Mechanism:** roll damping is all lever-arm thrust differential. Zeroing the hub spring
+  moment leaves roll unchanged and makes pitch equal roll; the pitch excess (+0.00083) comes
+  only through agilib's vehicle-specific flapping fits (rejected above). So BEM gives no
+  defensible value for `flapping_moment_body_rate`'s k_flap_w, and a k_z set to total
+  damping already contains every channel.
+- **Shape caveat:** across the whole sweep the descending-side rotors sit in the empirical
+  VRS window (F-20 gate; `vrs_empirical_inflow`), and at 200 rad/s the climbing-side rotors
+  windmill (−0.33 N each, 18 m/s axial climb). The curve leans on the least certain part of
+  BEM.
+- **F-24 extended:** with agilib's frame mixing, roll damping is exactly negated (as F-24
+  states) and yaw damping nearly vanishes (0.00004 vs 0.00308): the in-plane ω×r flow has
+  the wrong sign too. Pitch is unaffected.
+- **Outcome:** new term `rotor_rate_damping_nonlinear` (proposed, evidence `derived`,
+  defer). `bem_blade_element_loads`, `bem_momentum_inflow_closure`, `vrs_empirical_inflow`,
+  `bem_tpp_wrench` (verified, spec only) and `flapping_moment_body_rate` (candidate):
+  defer, with the revisit conditions in the registry. The flight data stay below
+  13.1 rad/s, where the linear term is within 10 % of BEM.
+
+### F-30 (NeuroBEM flight-data moments do not close) — **identification boundary**
+
+- **Method:** `tools/identify_neurobem.py` on the public NeuroBEM processed data (pinned by
+  sha256; authors' 13-segment test split).
+- **Result:** forces identify well (c_T, k_d, c_Dz; 95 % bootstrap intervals; held-out
+  force RMSE 0.557 N horizontal / 1.128 N vertical — for scale, the paper's Table II
+  reports 0.803 / 1.265 N for its BEM model). Moments do not: the roll torque that the
+  motor-speed differentials imply, regressed on the measured J ω̇, needs a 14.2 mm lever
+  arm against the 91.9 mm geometry. The
+  paper's Table II shows the same (predicting zero torque beats its polynomial and BEM
+  models on M_xy).
+- **Likely cause:** errors in variables — noise in the motor-speed differentials biases
+  every coefficient that multiplies them toward zero.
+- **Outcome:** torque, rotor-inertia and damping coefficients are not identified from this
+  data. INTAKE.md step 7 (`measured`) now requires an input-noise check.
+
+### Reference vehicle RACER_5IN — **ADOPTED (spec/parameters.py)**
+
+- The Kingfisher platform as one traced parameter set: forces measured (F-30 boundary),
+  k_z derived from BEM at 13 rad/s (F-29), the rest from the agilib config. Frozen in
+  `golden/checkdata/neurobem_racer.json`; values checked by `properties/test_findings.py`.
+  Identical to SkyFlow's `RACER_5IN` (SkyFlow 296023e). It joins CRAZYFLIE as the second
+  vehicle for INTAKE.md step 3's operating-point triage.
+
+### MuJoCo inertia-based angular drag — **status correction: proposed, not candidate**
+
+- The entry above is headed "ADOPTED (candidate tier)", but no spec function or registry
+  term ever landed. Now registry `angular_body_drag`, tier proposed, defer. Triage: the box
+  formula on the racer gives 3 % / 10 % / 22 % of BEM's roll damping at 10 / 50 / 200 rad/s
+  — an upper bound, since the box overstates an open frame.
 
 
 ## Prior evaluations (2026-07, RotorPy cross-validation phase)

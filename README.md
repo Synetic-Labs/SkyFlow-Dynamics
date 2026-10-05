@@ -25,10 +25,11 @@ expressions, and every backend runs the same golden + property suite.
 | `properties/` | pytest suite of physics invariants (accuracy): symbolic proofs, conservation, symmetry, dimensional scaling, Jacobian-vs-FD, and the golden authenticity tests. |
 | `golden/vectors/` | Frozen reference vectors from **five independent provenances**: RotorPy upstream (rigid body + Svacha aero, 4 files), Crazyflow's actual running code, SkyDreamer's actual running code, JSBSim's actual running engine (term-level vectors: ISA atmosphere, Dryden low-altitude turbulence, BLDC+propeller chain, rotor dynamic inflow/torque), and agilicious agilib's actual compiled code (NeuroBEM blade-element-momentum rotor, drag models, integrators) — each with commit/sha provenance. |
 | `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
-| `golden/checkdata/` | Published check data from pinned documents (archaic-source exception): author-run reference statistics where the reference code is no longer executable. Currently NASA CR-1998-206937 (Dryden). |
-| `docs/equations.md` | Generated equation catalog (`uv run python tools/render_docs.py`). |
+| `golden/checkdata/` | Published check data from pinned documents (archaic-source exception): author-run reference statistics where the reference code is no longer executable — currently NASA CR-1998-206937 (Dryden) — and frozen identification results from public measured data (`neurobem_racer.json`). |
+| `docs/equations.md` | Generated equation catalog with the open-work Backlog (`uv run python tools/render_docs.py`). |
+| `tools/` | Doc rendering, and the scripts that reproduce findings from use and identify reference vehicles (`bem_rate_damping.py`, `identify_neurobem.py`). |
 | `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
-| `INTAKE.md` | The protocol for evaluating a new paper/repo against the registry. |
+| `INTAKE.md` | The protocol for adding, deferring, and tracking dynamics (new sources and findings from use). |
 | `skyflow_dynamics/backends/` | Generated adapters — `skyflow_dynamics/backends/jax.py` (live): the spec emitted to JAX via `sympy.lambdify`, validated by the same golden + property suites (`properties/test_backend_jax.py`). |
 | `harness/` | *(later, TBD)* the discrete/stateful simulation layer (command delay lines, ZOH control rates, disturbance resampling, RNG) — deliberately **not** part of the math spec. |
 
@@ -54,10 +55,21 @@ boundaries (golden generators, future backends).
 
 Every term in `skyflow_dynamics/spec/registry.py` carries a tier:
 
-- **`verified`** — implemented and cross-validated in a reference simulator; covered by golden
-  vectors and property tests here.
+- **`verified`** — reproduces an independent reference: executed reference code (golden
+  vectors), published reference data, measured data, or an exact analytic check.
 - **`candidate`** — credible published model, symbolically checked and cited, awaiting numeric
-  validation against a runnable reference.
+  validation against an independent reference.
+- **`proposed`** — a known effect with provenance and a size estimate, but no spec expression
+  yet.
+
+The registry is also the ledger of open work: each term records its evidence, whether the
+backend uses it, and — until it is verified and in the backend — a decision on the next step
+(`open`, `pursue`, `defer` with a revisit condition, or `hold`). The rendered Backlog is at the
+end of [docs/equations.md](docs/equations.md); the rules are in [INTAKE.md](INTAKE.md).
+
+Reference vehicles in `spec/parameters.py`: `CRAZYFLIE` (via RotorPy) and `RACER_5IN` (the
+NeuroBEM / Agilicious 5-inch racer, identified from public flight data —
+`tools/identify_neurobem.py`).
 
 ## Running the tests
 
@@ -133,5 +145,6 @@ uv run --python 3.12 --with "jax==0.4.30" --with jax-dataclasses --with chex \
 
 ## Adding new physics
 
-See [INTAKE.md](INTAKE.md) — the protocol for evaluating a new paper or repository against the
-registry and landing whatever it contributes.
+See [INTAKE.md](INTAKE.md) — the protocol for evaluating a new source (paper, repository,
+dataset) or a finding from use against the registry: what to add, what to leave out, what to
+defer, and how each item is tracked until it is verified and in the backend.

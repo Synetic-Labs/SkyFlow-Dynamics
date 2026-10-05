@@ -1,17 +1,22 @@
 """
-The term registry: every physics term in the spec, with tier, provenance, and tests.
+The term registry: every physics term in the spec, with tier, provenance, and tests — and
+the ledger of what is missing or unfinished (INTAKE.md).
 
 Tiers:
-  verified  — cross-validated against a runnable reference implementation; covered by golden
-              vectors and property tests in this repo.
-  candidate — credible published model, symbolically checked and cited; awaiting numeric
-              validation against a runnable reference.
+  verified  — reproduces an independent reference (see EVIDENCE); covered by golden vectors
+              or exact property tests in this repo.
+  candidate — credible published model, symbolically checked and cited, in spec/; awaiting
+              independent numeric validation.
+  proposed  — a known effect with provenance but no spec expression yet (expression "").
+
+Ledger fields, per INTAKE.md: `evidence` (how the term was checked), `use` (math only, or
+emitted by a backend), and — for every term not yet final (verified AND in a backend) —
+`decision` on the next step, the `revisit` condition, and the `effect` size at the INTAKE
+operating points. Harness terms are exempt from the ledger fields.
 
 Domains: rigid_body · actuator · rotor_aero · frame_aero · sensor · disturbance ·
 discretization · differentiation · environment · harness (not physics — timing/stateful
 machinery, listed so nothing is lost).
-
-The INTAKE.md protocol appends candidates here; promotion to verified requires golden vectors.
 """
 
 from dataclasses import dataclass
@@ -24,17 +29,49 @@ class Source:
     url: str = ""
 
 
+TIERS = ("proposed", "candidate", "verified")
+
+#: Evidence kinds (INTAKE.md step 7). All but 'derived' are independent of the spec and can
+#: verify a term; 'derived' (computed from other spec terms) informs values and triage only.
+EVIDENCE = {
+    "executed": "golden vectors from running the source's own code",
+    "published": "reference tables or run statistics published by the source, pinned by hash",
+    "measured": "beats the backend model on held-out measured data (fixed dataset + split)",
+    "analytic": "exact closed-form identity or hand-computed values, derived independently",
+    "derived": "computed from other spec terms — not independent, does not verify",
+}
+INDEPENDENT_EVIDENCE = tuple(k for k in EVIDENCE if k != "derived")
+
+USES = ("spec", "backend")          # math only | emitted by backends/ (checked by tracing)
+DECISIONS = ("open", "pursue", "defer", "hold")
+
+
 @dataclass(frozen=True)
 class Term:
     key: str
-    tier: str            # 'verified' | 'candidate'
+    tier: str            # TIERS
     domain: str
     summary: str
-    expression: str      # dotted path to the defining spec function(s)
+    expression: str      # dotted path to the defining spec function(s); "" when proposed
     sources: tuple
     parameters: tuple = ()
     tests: tuple = ()
     notes: str = ""
+    evidence: tuple = ()     # EVIDENCE kinds
+    use: str = "spec"        # USES
+    decision: str = "open"   # next step while not final: DECISIONS ('open' = not triaged)
+    revisit: str = ""        # observable condition that reopens a 'defer' (or 'hold')
+    effect: str = ""         # size at the INTAKE operating points; required once triaged
+
+    @property
+    def final(self) -> bool:
+        """Nothing left to do: verified and emitted by a backend."""
+        return self.tier == "verified" and self.use == "backend"
+
+    @property
+    def ledger(self) -> bool:
+        """Carries a next-step decision (not final, not harness)."""
+        return not self.final and self.domain != "harness"
 
 
 SOURCES = {s.key: s for s in [
@@ -136,6 +173,11 @@ SOURCES = {s.key: s for s in [
            "pages only (implementations are proprietary and were not consulted); each block "
            "cites the public standard it implements",
            "https://www.mathworks.com/help/aeroblks/"),
+    Source("mujoco_fluid", "MuJoCo documentation, Computation > Fluid forces, inertia-based "
+           "model (equivalent box from the body inertia; quadratic and Stokes force and "
+           "torque); active in google-deepmind/mujoco_menagerie skydio_x2/x2.xml and "
+           "bitcraze_crazyflie_2/cf2.xml via <option density viscosity>",
+           "https://mujoco.readthedocs.io/en/stable/computation/fluid.html"),
     Source("cr206937", "Yeager — Implementation and Testing of Turbulence Models for the "
            "F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source "
            "(sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run "
@@ -149,19 +191,25 @@ TERMS = (
          "Rigid-body translational + rotational EOM with full inertia matrix",
          "spec.rigid_body.translational, spec.rigid_body.rotational",
          ("rotorpy", "mahony2012"), ("mass", "grav", "inertia"),
-         ("properties/test_rigid_body.py", "properties/test_golden.py")),
+         ("properties/test_rigid_body.py", "properties/test_golden.py"),
+         evidence=("executed",),
+         use="backend"),
     Term("quaternion_kinematics", "verified", "rigid_body",
          "q̇ = ½ q ⊗ (0, ω); wxyz scalar-first Hamilton, body→world",
          "spec.quaternion.kinematics", ("graf", "rotorpy"),
          (), ("properties/test_quaternion.py",),
          "Unit norm preserved exactly by the continuous equation; discrete integrators "
-         "renormalize post-step (harness)."),
+         "renormalize post-step (harness).",
+         evidence=("analytic",),
+         use="backend"),
 
     # ---------------- actuator ----------------
     Term("motor_first_order_lag", "verified", "actuator",
          "Ω̇ = (Ω_c − Ω)/τ_m", "spec.motor.first_order_lag",
          ("rotorpy", "forster2015"), ("tau_m",),
-         ("properties/test_motor.py", "properties/test_golden.py")),
+         ("properties/test_motor.py", "properties/test_golden.py"),
+         evidence=("executed",),
+         use="backend"),
     Term("motor_asymmetric_lag", "verified", "actuator",
          "Separate spin-up/spin-down linear+quadratic rates",
          "spec.motor.asymmetric_lag", ("crazyflow", "rotors_px4"), ("ka1", "ka2", "kd1", "kd2"),
@@ -169,7 +217,9 @@ TERMS = (
          "Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry "
          "over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces "
          "to first-order at (1/τ, 0, 1/τ, 0). RotorS/PX4's FirstOrderFilter is the "
-         "pure-exponential special case (ka2 = kd2 = 0)."),
+         "pure-exponential special case (ka2 = kd2 = 0).",
+         evidence=("executed",),
+         use="backend"),
     Term("motor_exact_exp_discretization", "verified", "discretization",
          "Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the RK stages",
          "spec.motor.exact_exp_step", ("flightning", "rotors_px4"), ("tau_m",),
@@ -178,40 +228,52 @@ TERMS = (
          "only. Exactness proven symbolically against the lag ODE (test_motor.py); "
          "verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py "
          "((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail); also "
-         "RotorS' FirstOrderFilter."),
+         "RotorS' FirstOrderFilter.",
+         evidence=("executed", "analytic"),
+         use="backend"),
     Term("throttle_curve", "verified", "actuator",
          "Ω_c = (Ω_max−Ω_min)√(k·u² + (1−k)u) + Ω_min",
          "spec.motor.throttle_to_speed", ("skydreamer",), (),
          ("properties/test_motor.py",),
-         "Identified k = 0.5 for a 5-inch racer (Ω_min 341.75, Ω_max 3100 rad/s)."),
+         "Identified k = 0.5 for a 5-inch racer (Ω_min 341.75, Ω_max 3100 rad/s).",
+         evidence=("analytic",),
+         use="backend"),
     Term("pwm_quantization", "verified", "actuator",
          "Throttle snapped to the integer PWM grid",
          "spec.motor.pwm_quantize", ("crazyflow",), (),
          ("properties/test_motor.py",),
-         "Piecewise-constant — exclude from differentiable paths."),
+         "Piecewise-constant — exclude from differentiable paths.",
+         evidence=("analytic",)),
     Term("battery_voltage_speed_cap", "verified", "actuator",
          "Supply voltage → achievable Ω_max (linear map); slow drift over discharge",
          "spec.motor.voltage_to_rpm", ("crazyflow", "skydreamer"), (),
          ("properties/test_motor.py",),
-         "Battery state evolution (SoC, sag dynamics) is harness-side."),
+         "Battery state evolution (SoC, sag dynamics) is harness-side.",
+         evidence=("analytic",)),
     Term("rotor_thrust_polynomial", "verified", "rotor_aero",
          "T_i = ct0 + ct1·Ω + ct2·Ω² per rotor (per-rotor coefficient asymmetry supported)",
          "spec.rotor_aero.thrust_magnitude", ("rotorpy", "crazyflow", "skydreamer"),
          ("ct0", "ct1", "ct2"), ("properties/test_wrench.py", "properties/test_golden.py"),
          "Crazyflow identifies RPM-unit polynomials; SkyDreamer's k_w is mass-normalized "
-         "(multiply by m; finding F-4)."),
+         "(multiply by m; finding F-4).",
+         evidence=("executed",),
+         use="backend"),
     Term("rotor_torque_polynomial", "verified", "rotor_aero",
          "Q_i = cq0 + cq1·Ω + cq2·Ω²; yaw torque on airframe = −s_i·Q_i·ê_i (opposes spin)",
          "spec.rotor_aero.torque_magnitude", ("rotorpy", "crazyflow"),
          ("cq0", "cq1", "cq2", "spin"), ("properties/test_wrench.py", "properties/test_golden.py"),
-         "⚠ RotorPy's rotor_directions = torque sign = −spin (finding F-6)."),
+         "⚠ RotorPy's rotor_directions = torque sign = −spin (finding F-6).",
+         evidence=("executed",),
+         use="backend"),
     Term("thrust_axis_misalignment", "verified", "rotor_aero",
          "Per-rotor unit thrust axis ê_i ≠ ẑ from assembly tolerance → parasitic forces/moments",
          "spec.wrench.body_wrench", ("hamandi2021",), ("axis",),
          ("properties/test_wrench.py",),
          "General per-rotor axis form per Hamandi Eq. (1). No executed reference models "
          "assembly tilt directly; verified by exact hand-computed wrench tests "
-         "(test_wrench.py) — pure geometry, zero numerical slack."),
+         "(test_wrench.py) — pure geometry, zero numerical slack.",
+         evidence=("analytic",),
+         use="backend"),
     Term("rotor_inertia_moments", "verified", "rotor_aero",
          "Gyroscopic precession −ω×h and yaw reaction −I_rot·Σ s_i Ω̇_i·ẑ",
          "spec.wrench.rotor_inertia_moment", ("crazyflow", "skydreamer", "flightning"),
@@ -222,36 +284,48 @@ TERMS = (
          "learnsyslab/crazyflow PR #86 (merged 2026-07-13) — post-fix Crazyflow golden "
          "vectors now cross-validate this term. flightning implements ONLY the yaw-reaction "
          "half (+I_m·Σ dir_i·Ω̇_i·ẑ with dir_i = −s_i ≡ this term at ω = 0, executed-code "
-         "verified) with the continuous rate Ω̇ = (Ω_c−Ω)/τ; it omits the −ω×h precession."),
+         "verified) with the continuous rate Ω̇ = (Ω_c−Ω)/τ; it omits the −ω×h precession.",
+         evidence=("executed",),
+         use="backend"),
 
     # ---------------- aerodynamics ----------------
     Term("rotor_drag_hforce", "verified", "rotor_aero",
          "H_i = −Ω_i·diag(k_d,k_d,k_z)·v_i at each hub, v_i incl. ω×r_i lever arm",
          "spec.rotor_aero.rotor_drag_force", ("rotorpy", "mahony2012", "skydreamer"),
          ("k_d", "k_z"), ("properties/test_energy.py", "properties/test_golden.py"),
-         "SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4)."),
+         "SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4).",
+         evidence=("executed",),
+         use="backend"),
     Term("blade_flapping_moment", "verified", "rotor_aero",
          "M_flap,i = −k_flap·Ω_i·(v_i × ẑ); +M_y (nose-down in FLU) for v_x > 0, k_flap > 0",
          "spec.rotor_aero.flapping_moment", ("rotorpy", "mahony2012"), ("k_flap",),
-         ("properties/test_wrench.py", "properties/test_golden.py")),
+         ("properties/test_wrench.py", "properties/test_golden.py"),
+         evidence=("executed",),
+         use="backend"),
     Term("translational_lift", "verified", "rotor_aero",
          "ΔT_i = k_h·(v_i,x² + v_i,y²)",
          "spec.rotor_aero.translational_lift", ("rotorpy", "agilicious"), ("k_h",),
          ("properties/test_golden.py", "properties/test_golden_agilicious.py"),
          "Also executed as agilib ModelLinCubDrag's induced_lift_coeff (2026-08-19). "
          "Small-airspeed linearization of the AoA/advance-ratio model — mutually exclusive "
-         "with k_angle/k_hor (validation rule)."),
+         "with k_angle/k_hor (validation rule).",
+         evidence=("executed",),
+         use="backend"),
     Term("aoa_advance_ratio_thrust", "verified", "rotor_aero",
          "T × (1 + k_angle·atan2(v_az, rΩ̄) + k_hor·atan2(‖v_axy‖, rΩ̄))",
          "spec.rotor_aero.aoa_thrust_factor", ("skydreamer",),
          ("k_angle", "k_hor", "r_prop"), ("properties/test_golden.py",),
          "Identified to racing speeds: k_angle 3.145, k_hor 7.245 (mass-normalized k_w; F-4). "
          "Spec follows the runnable reference (ENU, mean Ω̄, hypot); the paper's printed "
-         "equations differ (NED, ΣΩ, squared numerator) — see the function docstring."),
+         "equations differ (NED, ΣΩ, squared numerator) — see the function docstring.",
+         evidence=("executed",),
+         use="backend"),
     Term("vertical_climb_drag", "verified", "rotor_aero",
          "−k_v2·v_az·|v_az|·ẑ collective at CoM",
          "spec.rotor_aero.vertical_climb_drag", ("skydreamer",), ("k_v2",),
-         ("properties/test_golden.py",)),
+         ("properties/test_golden.py",),
+         evidence=("executed",),
+         use="backend"),
     Term("linear_drag", "verified", "frame_aero",
          "Lumped linear body-frame drag F = −diag(c_L)·v_a (Faessler differential-flatness form)",
          "spec.rotor_aero.linear_drag", ("faessler2018", "crazyflow", "agilicious"),
@@ -259,13 +333,17 @@ TERMS = (
          ("properties/test_energy.py", "properties/test_golden.py",
           "properties/test_golden_agilicious.py"),
          "Ω-independent lumping of the per-rotor H-force; identify against c_L OR k_d, "
-         "not both. Crazyflow stores the negated diagonal (drag_matrix = −diag(c_L))."),
+         "not both. Crazyflow stores the negated diagonal (drag_matrix = −diag(c_L)).",
+         evidence=("executed",),
+         use="backend"),
     Term("parasitic_drag", "verified", "frame_aero",
          "D = −‖v_a‖·diag(c_D)·v_a at CoM",
          "spec.rotor_aero.parasitic_drag", ("rotorpy",), ("c_D",),
          ("properties/test_energy.py", "properties/test_golden.py"),
          "⚠ ‖v‖-scaled, NOT per-axis |v_k|·v_k (SkyDreamer's form) — structurally different; "
-         "don't transplant coefficients between the two."),
+         "don't transplant coefficients between the two.",
+         evidence=("executed",),
+         use="backend"),
 
     # ---------------- disturbances / inputs ----------------
     Term("external_wrench_inputs", "verified", "disturbance",
@@ -273,7 +351,9 @@ TERMS = (
          "spec.rigid_body.translational, spec.rigid_body.rotational",
          ("skydreamer", "crazyflow"), (), ("properties/test_golden.py",),
          "The two-band resample-and-hold schedule that drives these in training (SkyDreamer "
-         "Table III: ±3 m/s²+±3 rad/s² @1 Hz, ±125 rad/s² @90 Hz, ε_u ±0.2) is harness-side."),
+         "Table III: ±3 m/s²+±3 rad/s² @1 Hz, ±125 rad/s² @90 Hz, ε_u ±0.2) is harness-side.",
+         evidence=("executed",),
+         use="backend"),
 
     # ---------------- sensors ----------------
     Term("imu_measurement", "verified", "sensor",
@@ -283,7 +363,9 @@ TERMS = (
          "Derived from rigid-body kinematics: a_S = a_B + α×r + ω×(ω×r) with all lever-arm "
          "quantities in the body frame, rotated once; proven against an independent "
          "closed-form model in test_sensors.py. Upstream rotorpy's IMU mixes frames "
-         "(findings F-1/F-2, see REFERENCES.md) and is not usable as a reference."),
+         "(findings F-1/F-2, see REFERENCES.md) and is not usable as a reference.",
+         evidence=("analytic",),
+         use="backend"),
 
     # ---------------- differentiable simulation ----------------
     Term("point_mass_surrogate", "verified", "differentiation",
@@ -294,13 +376,16 @@ TERMS = (
          "jax.jvp tangents, AND the step()-level custom_jvp wiring (c = f_d/m, dt-tangent 0) "
          "— executed-code confirmation of the surrogate-gradient scheme. Their attitude step "
          "is a biased-angle Rodrigues, not the exp map (finding F-25, deviation bounded in "
-         "the golden test); their custom_jvp is broken on JAX ≥ 0.11 (finding F-28)."),
+         "the golden test); their custom_jvp is broken on JAX ≥ 0.11 (finding F-28).",
+         evidence=("executed",)),
     Term("rk4_fixed_step", "verified", "discretization",
          "Classical RK4; the differentiable reference integrator (adaptive solvers are not "
          "cleanly differentiable)", "spec.discretization.rk4_step", ("rotorpy",),
          (), ("properties/test_motor.py", "properties/test_golden.py"),
          "flightning attribution removed 2026-08-19: its executed integrator is explicit "
-         "Euler at 1 kHz (exact attitude/motor substeps), no RK4 anywhere in the repo."),
+         "Euler at 1 kHz (exact attitude/motor substeps), no RK4 anywhere in the repo.",
+         evidence=("executed",),
+         use="backend"),
 
     # ---------------- candidates: ground effect / downwash ----------------
     Term("ground_effect_cheeseman_bennett", "candidate", "rotor_aero",
@@ -340,7 +425,8 @@ TERMS = (
          "The physical input behind ground effect / downwash / climb corrections. "
          "Verified 2026-08-18 against executed JSBSim FGPropeller "
          "(golden/vectors/jsbsim_prop_bldc.json): hover form at V_a = 0 and axial form "
-         "at V_a up to 18 m/s. V_a < 0 (descent/reverse-flow branch) unexercised."),
+         "at V_a up to 18 m/s. V_a < 0 (descent/reverse-flow branch) unexercised.",
+         evidence=("executed",)),
     Term("oblique_momentum_thrust", "verified", "rotor_aero",
          "Nonlinear T(airspeed): T = 2ρA·v_i·U, U = √(Vx²+Vy²+(v_i−Vz)²) (implicit v_i)",
          "spec.inflow.oblique_momentum_thrust",
@@ -350,7 +436,8 @@ TERMS = (
          "band excluded (descent 0.5–2 v_h; spec.inflow VRS constants). Verified "
          "2026-08-19: executed verbatim as agilib's ThrustFunction momentum side "
          "(NeuroBEM eq. 5) and pinned via the BEM closure vectors — the implicit-v_i "
-         "root regime; explicit T(v_i) evaluation is the same expression."),
+         "root regime; explicit T(v_i) evaluation is the same expression.",
+         evidence=("executed",)),
     Term("dynamic_inflow_lag", "verified", "rotor_aero",
          "First-order induced-inflow lag to Glauert equilibrium, τ ≈ 16/(γΩ); exact-exp step",
          "spec.inflow.dynamic_inflow_lag", ("jsbsim",), (),
@@ -361,7 +448,8 @@ TERMS = (
          "the exact-exp step to 1e-10 across hover/axial/edgewise/oblique conditions; "
          "ν_eq is the Glauert equilibrium with the reference's Bailey C_T (transcribed, "
          "self-checked at 1e-12 in the generator — the Bailey closed form itself is not "
-         "a spec term)."),
+         "a spec term).",
+         evidence=("executed",)),
     Term("advance_ratio_tables", "verified", "rotor_aero",
          "T = C_T(J)·ρ·n²·D⁴, P = C_P(J)·ρ·n³·D⁵ with measured tables; windmilling via sign",
          "spec.atmosphere.advance_ratio, spec.atmosphere.propeller_thrust",
@@ -373,7 +461,8 @@ TERMS = (
          "JSBSim FGPropeller with the wheel's APC 9x4.5E tables "
          "(golden/vectors/jsbsim_prop_bldc.json): J and T pinned per step over J up to "
          "0.42; the P form is exercised through the shaft-ODE load. Windmilling "
-         "(J < 0 / C_T < 0) unexercised — the shipped table domain is J ≥ 0."),
+         "(J < 0 / C_T < 0) unexercised — the shipped table domain is J ≥ 0.",
+         evidence=("executed",)),
     Term("isa_atmosphere", "verified", "environment",
          "USSA-1976 layered T(h), P(h); ρ = P/RT; thrust/torque scale linearly with ρ",
          "spec.atmosphere.temperature_troposphere, spec.atmosphere.pressure_gradient_layer, "
@@ -384,7 +473,8 @@ TERMS = (
          "Verified 2026-08-18 against executed JSBSim FGStandardAtmosphere "
          "(golden/vectors/jsbsim_isa_atmosphere.json): T/P/ρ/a at 12 altitudes to 35 kft, "
          "5e-4 relative (imperial-vs-ICAO constant sets); inputs are geopotential "
-         "altitude. Stratosphere (isothermal layer) unexercised."),
+         "altitude. Stratosphere (isothermal layer) unexercised.",
+         evidence=("executed",)),
 
     # ---------------- candidates: rotor aero extensions ----------------
     Term("rolling_moment", "candidate", "rotor_aero",
@@ -404,7 +494,15 @@ TERMS = (
          ("properties/test_candidates.py",),
          "Spin-sign-free: adds (not cancels) pairwise — a net damping derivative. Kai "
          "Eq. (7) carries the same hub moment with √T scaling; JSBSim derives it from flap "
-         "angles + hinge-offset hub moments."),
+         "angles + hinge-offset hub moments.",
+         decision="defer",
+         revisit=("a measured or executed reference separates the hub flapping moment from the "
+                  "lever-arm thrust differential (F-29 shows BEM cannot)"),
+         effect=("F-29: BEM's roll damping is all lever-arm thrust differential (k_z channel); "
+                 "the hub moment adds nothing in roll and +0.00083 N·m·s/rad in pitch, only "
+                 "through agilib's vehicle-specific flapping fits (rejected, REFERENCES). No "
+                 "defensible k_flap_w; adding one on top of a k_z set to total damping "
+                 "double-counts")),
     Term("bramwell_rotor_torque", "verified", "rotor_aero",
          "Q = ρbcδ(ΩR)²R²(1+4.5μ²)/8 − (Tλ+Hμ)R: profile + induced/climb torque vs flight "
          "state",
@@ -417,7 +515,8 @@ TERMS = (
          "executed JSBSim FGRotor (golden/vectors/jsbsim_rotor_inflow.json): torque "
          "identity with the δ = 0.009 + 0.3(6C_T/(aσ))² polar at 1e-7 incl. edgewise "
          "μ ≈ 0.07 (the (1+4.5μ²) term is live). H from zero-body-rate flapping; "
-         "body-rate flapping contributions to H unexercised (rig holds rates at 0)."),
+         "body-rate flapping contributions to H unexercised (rig holds rates at 0).",
+         evidence=("executed",)),
     Term("ground_effect_talbot_inflow", "candidate", "rotor_aero",
          "IGE inflow factor v_i ← (1 − load·e^{−k_ge(h+h₀)})·v_i, exponential in height",
          "spec.ground_effect.talbot_inflow_factor", ("talbot1977", "jsbsim"), (),
@@ -446,7 +545,13 @@ TERMS = (
          "are executed-code identifications absent from the paper. ⚠ paper eq. (7) prints "
          "+v_ver·β·cosψ where the code has −v_ver·β·cosψ (inert: flapping zeroed during "
          "integration; code form adopted). Reference quadrature: single 15-point "
-         "Gauss-Kronrod per axis (generator/consumer detail, not spec)."),
+         "Gauss-Kronrod per axis (generator/consumer detail, not spec).",
+         evidence=("executed",),
+         decision="defer",
+         revisit=("a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training "
+                  "or flight steps), or sustained axial descent through the vortex-ring band "
+                  "(0.5–2 v_h)"),
+         effect="see bem_tpp_wrench (the BEM family moves together)"),
 
     Term("bem_momentum_inflow_closure", "verified", "rotor_aero",
          "Induced velocity as root of T_BEM(v_i) = 2ρA·v_i·√(v_hor²+(v_ver−v_i)²)",
@@ -458,7 +563,13 @@ TERMS = (
          "reference silently returns range-max 30 m/s (finding F-21) — pinned as such. "
          "Momentum side IS spec.inflow.oblique_momentum_thrust with V=(v_hor,0,v_ver). "
          "Reference solves by warm-started vectorized Brent (tol 1e-3); differentiable "
-         "backends: fixed smooth iterations, or v_i from dynamic_inflow_lag state (in-ODE)."),
+         "backends: fixed smooth iterations, or v_i from dynamic_inflow_lag state (in-ODE).",
+         evidence=("executed",),
+         decision="defer",
+         revisit=("a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training "
+                  "or flight steps), or sustained axial descent through the vortex-ring band "
+                  "(0.5–2 v_h)"),
+         effect="see bem_tpp_wrench"),
 
     Term("vrs_empirical_inflow", "verified", "rotor_aero",
          "Vortex-ring-state induced velocity: ṽ_i = v_h·(1+1.125x−1.372x²+1.718x³−0.655x⁴), "
@@ -470,7 +581,14 @@ TERMS = (
          "and 6 ungated. Fills the descent band where momentum theory fails (spec.inflow VRS constants). "
          "Blend variants differ: paper max(ṽ_i, v_h); executed agilib max(v_i^mom, ṽ_i) then "
          "clamp ≤ 2·v_h — and its gate fires on ANY-rotor predicates (finding F-20). "
-         "Non-smooth (gate + max/min): document surrogate before differentiating through."),
+         "Non-smooth (gate + max/min): document surrogate before differentiating through.",
+         evidence=("executed",),
+         decision="defer",
+         revisit=("a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training "
+                  "or flight steps), or sustained axial descent through the vortex-ring band "
+                  "(0.5–2 v_h)"),
+         effect=("see bem_tpp_wrench; in the F-29 roll sweep the descending-side rotors sit in "
+                 "this window at every rate, so it shapes BEM's rate-damping curve")),
 
     Term("bem_tpp_wrench", "verified", "rotor_aero",
          "Per-rotor force/torque from tip-path-plane tilt: f = Rz(χ)·(−(H+T·sin a1), "
@@ -487,7 +605,17 @@ TERMS = (
          "rational fits are rejected (REFERENCES.md) — general closures per Prouty pp. 463 "
          "remain future work. Reduces to (0,0,T) / −s·Q·ẑ at zero flapping and H. The "
          "executed reference also scales the collective z-force by 0.9575 (frame "
-         "obstruction) — an assembly-level identified constant."),
+         "obstruction) — an assembly-level identified constant.",
+         evidence=("executed",),
+         decision="defer",
+         revisit=("a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training "
+                  "or flight steps), or sustained axial descent through the vortex-ring band "
+                  "(0.5–2 v_h)"),
+         effect=("F-29, 5-inch racer at hover (tools/bem_rate_damping.py): roll damping 0.00086 "
+                 "/ 0.00132 / 0.00220 / 0.00402 N·m·s/rad at 1 / 10 / 50 / 200 rad/s; the "
+                 "backend's linear k_z lever-arm channel, set to BEM at 13 rad/s, gives 1.69× / "
+                 "1.10× / 0.66× / 0.36× of that. Cost: a Brent inflow solve and disk quadrature "
+                 "per rotor per step")),
 
     Term("per_axis_quadratic_drag", "verified", "frame_aero",
          "F_k = −k_Q,k·v_a,k·|v_a,k| per body axis (k_Q = ½ρ·c_k·A_k physical packing)",
@@ -502,7 +630,8 @@ TERMS = (
          "params). Per-axis |v|·v form (SkyDreamer convention), NOT parasitic_drag's ‖v‖·v — "
          "don't mix coefficients. vertical_climb_drag is its z-restriction: enable one, not "
          "both. ⚠ agilib's ModelBodyDrag adds the force to the acceleration slot without "
-         "dividing by mass (finding F-19); vectors pin the force expression."),
+         "dividing by mass (finding F-19); vectors pin the force expression.",
+         evidence=("executed",)),
 
     Term("cubic_axis_drag", "verified", "frame_aero",
          "F_k = −k_C,k·v_a,k³ per body axis — cubic companion of linear_drag (PolyFit model)",
@@ -510,7 +639,8 @@ TERMS = (
          ("properties/test_bem.py", "properties/test_golden_agilicious.py"),
          "Verified 2026-08-19 against the EXECUTED agilib ModelLinCubDrag. "
          "The NeuroBEM 'PolyFit' baseline is linear_drag + this + translational_lift "
-         "(agilib ModelLinCubDragIndLift, induced_lift_coeff ≡ k_h). Smooth odd polynomial."),
+         "(agilib ModelLinCubDragIndLift, induced_lift_coeff ≡ k_h). Smooth odd polynomial.",
+         evidence=("executed",)),
 
     # ---------------- candidates: motor / battery electrical ----------------
     Term("dc_motor_quasistatic", "verified", "actuator",
@@ -523,7 +653,8 @@ TERMS = (
          "Euler-replayed through the reference's own discretization at 1e-7, with "
          "K_q = K_e = 60/(2πKv) (Drela) and k_m = C_P(0)ρD⁵/(8π³) from the APC table. "
          "The b·Ω viscous term and the I0 friction deadband are unexercised (b = 0, "
-         "I0 = 0 in the rig; the deadband is not a spec term)."),
+         "I0 = 0 in the rig; the deadband is not a spec term).",
+         evidence=("executed",)),
     Term("esc_battery_coupling", "candidate", "actuator",
          "V_m = u·V_batt; battery-coupled steady-state speed (√-like in u·V_batt)",
          "spec.motor_electrical.esc_mean_voltage, spec.motor_electrical.steady_state_speed",
@@ -563,7 +694,8 @@ TERMS = (
          "vectors — JSBSim FGWinds ttTustin implements the same CR-206937 difference "
          "equations with the closures active, and its seeded runs are reproduced "
          "sample-exactly via recovered driving noise "
-         "(golden/vectors/jsbsim_dryden_lowalt.json)."),
+         "(golden/vectors/jsbsim_dryden_lowalt.json).",
+         evidence=("executed", "published")),
     Term("von_karman_turbulence", "candidate", "environment",
          "von Kármán spectra (5/6, 11/6 exponents) + standard rational filter approximations",
          "spec.wind.von_karman_psd_u", ("mil8785c",), (),
@@ -593,7 +725,8 @@ TERMS = (
          "Euler but symplectic on the mechanical part — bounded energy error instead of "
          "drift. agilib groups (v, ω, Ω) as velocities and (x, q) as positions; the "
          "quaternion advances with the NEW ω against the OLD q. Single smooth composition, "
-         "cleanly differentiable."),
+         "cleanly differentiable.",
+         evidence=("executed",)),
 
     Term("quaternion_norm_correction", "candidate", "discretization",
          "q̇ = ½ q ⊗ (0, ω) + K·(1−‖q‖²)·q — smooth Lagrange-style norm stabilization",
@@ -617,6 +750,46 @@ TERMS = (
          "draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. "
          "RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero "
          "rather than the stationary σ_b²τ/2 (their own TODO)."),
+
+    # ---------------- proposed (known effects, no spec expression yet) ----------------
+    Term("rotor_rate_damping_nonlinear", "proposed", "rotor_aero",
+         "Rotor body-rate damping that stiffens with rate: D(p) from the rotor inflow "
+         "response, in place of the constant lever-arm derivative 4·Ω·k_z·a² of the "
+         "verified H-force",
+         "", ("neurobem", "agilicious", "hoffmann2007"), (),
+         ("properties/test_findings.py",),
+         "Finding F-29 (REFERENCES.md). Routes: (a) put the verified BEM family in the "
+         "backend (exact, costly); (b) a reduced term fitted to tools/bem_rate_damping.py, "
+         "e.g. D(p) = D₀ + D₁·|p|. Either REPLACES the k_z lever-arm share of the damping — "
+         "never add it on top. Shape caveat: across the sweep the descending-side rotors "
+         "sit in the empirical VRS window (vrs_empirical_inflow) and at 200 rad/s the "
+         "climbing-side rotors windmill (−0.33 N each), so the curve leans on the least "
+         "certain part of BEM. Roll and pitch agree once the hub spring moment (fed by the "
+         "vehicle-specific flapping fits) is zeroed (test_findings.py).",
+         evidence=("derived",),
+         decision="defer",
+         revisit=("a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of "
+                  "training or flight steps), or a flip / freestyle task"),
+         effect=("F-29, 5-inch racer at hover: BEM roll damping 0.00086 / 0.00132 / 0.00220 / "
+                 "0.00402 N·m·s/rad at 1 / 10 / 50 / 200 rad/s. A linear term set to BEM at "
+                 "13 rad/s (the NeuroBEM flight-data maximum) is 1.69× / 1.10× / 0.66× / "
+                 "0.36× of BEM: within 10 % only near 10–13 rad/s, a third of BEM at 200")),
+    Term("angular_body_drag", "proposed", "frame_aero",
+         "Frame angular drag −diag(c_R)·(|ω|∘ω) − diag(c_r)·ω (MuJoCo inertia-based fluid "
+         "model torque terms)",
+         "", ("mujoco_fluid",), (),
+         (),
+         "REFERENCES.md listed this as 'ADOPTED (candidate tier)' but no spec function or "
+         "registry term ever landed; recorded here as proposed (2026-10-04). MuJoCo's box "
+         "formula g_D,i = −½ρ·r_i·(r_j⁴+r_k⁴)·|ω_i|ω_i, g_V,i = −8βπ·r_eq³·ω_i is not "
+         "physical for an open frame: most rotational damping comes from the rotors, "
+         "already in rotor_drag_hforce. Treat c_R, c_r as fitted residuals, not box values.",
+         decision="defer",
+         revisit=("a fit of the backend model to measured flight data leaves a rate-"
+                  "proportional residual torque after the rotor terms"),
+         effect=("box formula on the 5-inch racer (ρ 1.225, β 1.8e-5, J of the NeuroBEM "
+                 "platform): 3 % / 10 % / 22 % of BEM's roll damping at 10 / 50 / 200 rad/s "
+                 "— an upper bound, since the box overstates an open frame")),
 
     # ---------------- harness (tracked, not physics) ----------------
     Term("command_transport_delay", "verified", "harness",
@@ -655,7 +828,27 @@ def validate_registry() -> None:
     domains = ("rigid_body", "actuator", "rotor_aero", "frame_aero", "sensor", "disturbance",
                "discretization", "differentiation", "environment", "harness")
     for t in TERMS:
-        assert t.tier in ("verified", "candidate"), t.key
+        assert t.tier in TIERS, t.key
+        assert (t.expression == "") == (t.tier == "proposed"), \
+            f"{t.key}: proposed terms, and only they, have no expression"
+        assert set(t.evidence) <= set(EVIDENCE), f"{t.key}: unknown evidence {t.evidence}"
+        assert t.use in USES, f"{t.key}: unknown use {t.use}"
+        assert t.use == "spec" or t.tier == "verified", \
+            f"{t.key}: only verified terms go into a backend"
+        if t.tier == "verified" and t.domain != "harness":
+            assert set(t.evidence) & set(INDEPENDENT_EVIDENCE), \
+                f"{t.key} is verified without independent evidence"
+        if "derived" in t.evidence:
+            assert t.tests, f"{t.key}: derived evidence needs a test that reproduces it"
+        if t.ledger:
+            assert t.decision in DECISIONS, f"{t.key}: unknown decision {t.decision}"
+            if t.decision != "open":
+                assert t.effect, f"{t.key}: a triaged term records its effect size"
+            if t.decision == "defer":
+                assert t.revisit, f"{t.key}: a deferred term needs a revisit condition"
+        else:
+            assert t.decision == "open" and not (t.revisit or t.effect), \
+                f"{t.key}: final and harness terms carry no next-step decision"
         assert t.domain in domains, f"{t.key}: unknown domain {t.domain}"
         assert t.sources, f"{t.key} has no sources"
         for s in t.sources:
