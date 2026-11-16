@@ -182,6 +182,17 @@ SOURCES = {s.key: s for s in [
            "F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source "
            "(sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run "
            "statistics", "https://ntrs.nasa.gov/citations/19980028448"),
+    Source("simitl", "SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored "
+           "and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a "
+           "Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; "
+           "no measured data. Evaluated by reading, not executed",
+           "https://github.com/hammerill/libfpv"),
+    Source("l2f", "rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) "
+           "as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann "
+           "& Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools "
+           "e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, "
+           "doi 10.1126/scirobotics.aec1481). Evaluated by reading, not executed",
+           "https://github.com/rl-tools/rl-tools"),
 ]}
 
 
@@ -292,8 +303,13 @@ TERMS = (
     Term("rotor_drag_hforce", "verified", "rotor_aero",
          "H_i = −Ω_i·diag(k_d,k_d,k_z)·v_i at each hub, v_i incl. ω×r_i lever arm",
          "spec.rotor_aero.rotor_drag_force", ("rotorpy", "mahony2012", "skydreamer"),
-         ("k_d", "k_z"), ("properties/test_energy.py", "properties/test_golden.py"),
-         "SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4).",
+         ("k_d", "k_z"), ("properties/test_energy.py", "properties/test_golden.py",
+                          "properties/test_findings.py"),
+         "SkyDreamer's lumped −k_x·v·ΣΩ is this summed over rotors (k_d = m·k_x; F-4). "
+         "Nondimensional form κ = k_d/√(ρ·A·c_T/2), the H-force over the hover momentum "
+         "drag: 0.40 on RACER_5IN (measured k_d), 0.22 on CRAZYFLIE (placeholder k_d). "
+         "libfpv's datasheet prior κ = 0.6 overstates the racer's k_d by 51 % "
+         "(tools/sim_source_triage.py) — a starting value before identification, no more.",
          evidence=("executed",),
          use="backend"),
     Term("blade_flapping_moment", "verified", "rotor_aero",
@@ -742,14 +758,19 @@ TERMS = (
     Term("imu_stochastic_errors", "candidate", "sensor",
          "Per-axis IMU corruption: exact-discretized Gauss–Markov bias + white noise + turn-on bias",
          "spec.sensors.imu_bias_gauss_markov_step, spec.sensors.imu_corrupt",
-         ("rotors_px4",), (),
+         ("rotors_px4", "l2f"), (),
          ("properties/test_candidates.py",),
          "b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. "
          "Exact OU discretization (Maybeck Vol. 1 Eq. 4-114, as cited in gazebo_imu_plugin.cpp; "
          "book not directly consulted — exactness proven symbolically instead). Unit-normal "
          "draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. "
          "RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero "
-         "rather than the stationary σ_b²τ/2 (their own TODO)."),
+         "rather than the stationary σ_b²τ/2 (their own TODO). Executed reference "
+         "available (2026-11-15, not yet run): l2f's bias_process_step "
+         "(operations_generic/70_post_integration.h at rl-tools ad2e56e) has the same "
+         "transition and driving std, with the τ → ∞ random walk as an explicit branch; a "
+         "golden generator compiling that header would verify this term. l2f's white noise "
+         "is a per-sample std (σ_nd/√dt here) and its turn-on bias a uniform draw."),
 
     # ---------------- proposed (known effects, no spec expression yet) ----------------
     Term("rotor_rate_damping_nonlinear", "proposed", "rotor_aero",
@@ -790,6 +811,52 @@ TERMS = (
          effect=("box formula on the 5-inch racer (ρ 1.225, β 1.8e-5, J of the NeuroBEM "
                  "platform): 3 % / 10 % / 22 % of BEM's roll damping at 10 / 50 / 200 rad/s "
                  "— an upper bound, since the box overstates an open frame")),
+
+    Term("propwash_thrust_unsteadiness", "proposed", "rotor_aero",
+         "Unsteady per-rotor thrust when a rotor descends into its own wake (propwash): a "
+         "fluctuating loss on top of the mean vortex-ring inflow",
+         "", ("simitl",), (),
+         ("properties/test_findings.py",),
+         "SimITL: T_i ← T_i·(1 − min(V/V_max, 1)·n_i·c²·k_pw), c = max(0, (cos∠(v_a, −ê_i) "
+         "− c₀)/(1 − c₀)), n_i ∈ [0, 1] a 45 Hz low-passed simplex noise drawn per rotor "
+         "(physics.cpp:516-552; wind-relative after libfpv patch 0017). A game stand-in: "
+         "libfpv's own notes list vortex ring state as still open. The verified "
+         "vrs_empirical_inflow gives the mean induced velocity in the same band and no "
+         "fluctuation; the exogenous τ_ext input is where consumers put such disturbances "
+         "today. No expression until a measured source gives the fluctuation amplitude and "
+         "spectrum against the descent ratio v_ver/v_h. It would multiply the thrust of the "
+         "mean-inflow model: route descent through ONE path, never both.",
+         decision="defer",
+         revisit=("a consumer task spends sustained time descending through its own wake "
+                  "(dives, split-S, hard braking; over ~1 % of steps) and shows attitude "
+                  "oscillation the mean model does not reproduce, or a measured "
+                  "thrust-fluctuation dataset for small rotors in descent is found"),
+         effect=("SimITL's 5-inch tuning at the racer's axial points "
+                 "(tools/sim_source_triage.py): per-rotor thrust loss up to 21 % at 0.5 v_h "
+                 "descent and 84 % at 2 v_h, independent across rotors — a hand-tuned upper "
+                 "bound, not a measurement")),
+    Term("imu_rotor_vibration", "proposed", "sensor",
+         "Rotor-synchronous vibration in the gyro and accelerometer: lines at 1×, 2×, 3× each "
+         "rotor's frequency plus frame resonances, growing with rotor speed",
+         "", ("simitl",), (),
+         ("properties/test_findings.py",),
+         "SimITL adds to the gyro, per motor and axis, A·(0.05 + damage)·(Ω/Ω_no-load)²·"
+         "[sin φ + h₁·sin 2φ + h₂·sin 3φ] with φ̇ = Ω, plus two frame-resonance sinusoids "
+         "gated on rotor speed, then a 500 Hz low-pass (physics.cpp:87-108, 388-498). Tuned "
+         "to look like flight logs, not measured, and the Ω² amplitude law is not derived: "
+         "a rigid frame with rotor imbalance m_u·e sees an in-plane hub force m_u·e·Ω², so "
+         "a rate amplitude ∝ Ω, reaching roll and pitch only through hub height or frame "
+         "flexibility. No expression until a measured source (flight-log spectra with "
+         "rotor-speed telemetry) fixes the law. Two routes: an additive sensor term beside "
+         "imu_stochastic_errors, or a rotating hub force in the EOM (needs dt ≪ 1/Ω).",
+         decision="defer",
+         revisit=("a consumer policy or estimator reads the raw gyro or accelerometer "
+                  "instead of the flight controller's notch-filtered output, or a "
+                  "sim-to-real gap is traced to rotor-harmonic noise"),
+         effect=("SimITL's 5-inch tuning (tools/sim_source_triage.py): 0.18 rad/s per motor "
+                 "at full throttle and 0.017 rad/s at hover on the roll axis — 36× and 3.3× "
+                 "its white gyro noise half-range of 0.005 rad/s; the lines sit near "
+                 "170–550 Hz")),
 
     # ---------------- harness (tracked, not physics) ----------------
     Term("command_transport_delay", "verified", "harness",

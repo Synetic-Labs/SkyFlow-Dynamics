@@ -801,6 +801,7 @@ Standard atmospheric turbulence for a small-multirotor simulator is fully specif
 - **Parameters:** b ~ vehicle span; for a sub-metre multirotor the 4b/(pi*V) corner frequencies push the rotational gust energy far above the rigid-body bandwidth and amplitudes scale with b^(1/3)/V.
 - **Relevance:** Derived for fixed-wing span-differential effects; for a small multirotor the equivalent physics (per-rotor gust differences across the airframe) is negligible at L >> vehicle size, and rotorpy already captures the dominant rotational aero coupling via per-rotor local airspeed (omega x r term). Not worth the added state.
 - **Notes:** If ever needed, the honest multirotor analogue is sampling a spatially correlated field at each rotor position, not the fixed-wing gradient filters.
+- **Sized 2026-11-15:** the per-rotor analogue was evaluated with libfpv (which implements it) — rms roll disturbance 0.6–4.6 rad/s² on RACER_5IN from a 5 m/s wind at 10 m up to severe turbulence at 2 m, under 1 % of roll authority. See "Per-hub wind sampling" under libfpv + SimITL; `tools/sim_source_triage.py`.
 
 
 ## MathWorks Aerospace Blockset / Aerospace Toolbox / UAV Toolbox (documentation survey, 2026-08-11)
@@ -881,6 +882,136 @@ re-litigates them.
 
 - **Source:** WGS84 / ANSI/AIAA R-004-1992 (transforms); Lowry, Gracey NASA RP-1046 (airspeed); NACA Report 1135 (flow relations); Stevens & Lewis (aero forces/moments); mathworks.com/help/aeroblks/ various.
 - **Relevance:** Frame-boundary machinery (this repo keeps converters at the boundaries — golden generators, future backends), fixed-wing utilities, or generic servo/turbofan models with no multirotor content. `alphabeta`-style incidence quantities already appear inside the AoA thrust terms where needed.
+
+
+## libfpv + SimITL (hammerill/libfpv @ 08d140a, AJ92/SimITL @ c881d55) — read-only intake 2026-11-15
+
+libfpv is an FPV flight library for games: Betaflight in the loop, SimITL's `src/sim/physics.cpp`
+as the flight model, and a patch series on top (`patches/simitl/`, rationale in
+`docs/DECISIONS.md` D25/D27/D30). The physics is one 877-line file plus six patches; its
+constants are tuned by pilots' feel against plausibility bands, with no measured data. Read at
+the pinned commits, not executed. Triage numbers below come from
+`tools/sim_source_triage.py` and are pinned in `properties/test_findings.py`.
+
+Convention traps: world Y-up, left-handed (Unity); body Y is the thrust axis; quaternions
+xyzw; `quadMotorDir` +1 = clockwise; rotor speeds in RPM; inertia stored inverted with the
+yaw entry negative.
+
+### Rotor drag F_i = −c·Ω_i·v_inplane at each hub (libfpv patch 0011) — already covered (+ parameter note)
+
+- **Equations:** per rotor F_i = −c·Ω_i·Π_ê·(v − v_wind,i), c = k·√(ρ·A·T_max/2)/Ω_max, applied at the hub (so it also enters r_i × F_i). With T_max = c_T·Ω_max² this is k_d = κ·√(ρ·A·c_T/2): the H-force as a fraction κ of the hover momentum drag ρ·A·v_h·v.
+- **Source:** `patches/simitl/0011-rotor-drag-advance-ratio-thrust.patch`; DECISIONS.md D25.
+- **Parameters:** κ = 0.6 for open props (set to match Faessler's mass-normalised 0.39–0.54 s⁻¹), 1.0 for ducted whoops.
+- **Relevance:** exactly `rotor_drag_hforce` restricted to the rotor plane (k_z = 0), without the ω×r_i lever-arm term in the hub velocity.
+- **Notes:** κ evaluated on the reference vehicles: **0.40** on RACER_5IN (measured k_d; interval 0.375–0.42), 0.22 on CRAZYFLIE (RotorPy's placeholder k_d). κ = 0.6 would overstate the racer's k_d by 51 %. Recorded on the registry term as a datasheet-only starting value.
+
+### Thrust falloff with axial inflow from geometric pitch (libfpv patch 0011) — rejected
+
+- **Equations:** T = T_max·(Ω/Ω_max)²·max(0, 1 − (J/J0)²) for axial inflow v > 0, J0 = 0.9·pitch/D; no change in descent. Torque keeps a quarter of its static value at zero thrust: Q = Q_static·(0.25 + 0.75·T/T_static).
+- **Source:** same patch, `inflowThrustFactor` / `inflowTorqueFactor`.
+- **Relevance:** a two-number closure for `advance_ratio_tables` that needs only the prop's name.
+- **Notes:** against the executed JSBSim APC 9x4.5E table (`golden/vectors/jsbsim_prop_bldc.json`, 78 points, J 0.19–0.84) the closure is off by 29 % of static thrust rms and 49 % at worst: it reaches zero thrust at J = 0.45, where the table still gives half the static value, and its flat top at J = 0 contradicts the table's near-linear fall. SimITL's original curve is a fixed quadratic in v, independent of rpm, that reaches zero only at 142 m/s on the 5-inch prop (D25). The measured-table term stays the only route.
+
+### Brushed-equivalent motor torque balance, ESC delay, battery sag — already covered
+
+- **Equations:** J_r·Ω̇ = K_q·(u·V_sag − Ω/K_v)/R − sgn(Ω)·K_q·I_0 − Q_prop, with a stiction deadband at rest; u through a 2 ms transport delay and a 100 Hz first-order low-pass; V_sag = n_cells·OCV(used fraction) − I·R_int·(1 + used²); I_batt = Σ|I_i|·u_i + P_electronics/V.
+- **Source:** `physics.cpp:236-271, 294-343, 579-614`; patch 0013; D27.
+- **Relevance:** `dc_motor_quasistatic`, `esc_battery_coupling`, `thevenin_battery` (series-R special case with a tabulated LiPo OCV), `command_transport_delay`.
+- **Notes:** K_q = 8.3/K_v [N·m/A, K_v in rpm/V] against a back-EMF constant of 60/(2π·K_v) = 9.55/K_v — the two differ by 13 %, where the spec's verified JSBSim form has K_q = K_e. The 100 Hz low-pass stands in for the winding inductance (skipped earlier). The constant-power electronics load is a one-line addition to the battery current, harness-side. The step-wise clamp |ΔΩ| ≤ |u·V·K_v − Ω| is a numerical guard.
+
+### Frame drag on projected area, centre-of-pressure offset, "Munk" tumbling, flutter — rejected
+
+- **Equations:** F = −½ρ·C_d·(Σ_k A_k·|v̂_k|)·‖v_a‖·v_a — a third lumping beside `parasitic_drag` (‖v‖·diag(c)·v) and `per_axis_quadratic_drag` (|v_k|·v_k): the box's projected area, force always anti-parallel to the airspeed. τ_cp = r_cp × F with r_cp = 0.1 × arm above the CoM (patch 0012; SimITL: a fixed 2 cm). "Munk" torque τ_i ∝ v_j·v_k·(A_k − A_j) scaled by ½ρ·C_d·arm·(0.1·mass). Flutter: two sinusoids at 2·‖v‖ Hz with amplitude 2e-5·v²·A.
+- **Source:** `physics.cpp:696-714, 736-789`; patch 0012.
+- **Notes:** the tumbling term is dimensionally inconsistent (a torque scaled by mass × a "porosity" 0.1) and the flutter is decorative. On the measured racer the horizontal frame drag fits to zero (rotor drag explains it), so a centre-of-pressure lever on it is moot, and flight-data moments do not close (F-30), so r_cp could not be identified anyway. The attitude-dependent frame moment itself is real physics — MuJoCo's ellipsoid model (skipped above) is the credible form if it is ever needed.
+
+### Angular damping −ω|ω|·c·A − ε·ω — already covered (corroborates `angular_body_drag`, proposed)
+
+- **Source:** `physics.cpp:801-814` (c = 1e-5 roll/pitch, 2e-6 yaw; ε = 1e-6; clamped at ±2 N·m).
+- **Notes:** with their 5-inch frame area the roll torque is 0.07 % of BEM's roll damping at 10 rad/s and 0.5 % at 200 rad/s — consistent with the registry note that rotational damping comes from the rotors.
+
+### Ground effect T·(1 + 0.7·g²), g = 1 − h/h_max along the thrust axis per rotor — rejected
+
+- **Source:** `physics.cpp:532`; libfpv `flight.cpp:775-789` (ray from each hub along body-down, h_max = 0.33 m on the 5-inch preset).
+- **Notes:** a hand-set quadratic (+70 % at contact), no data. The four ground-effect candidates already in the spec have published bases.
+
+### Propwash: fluctuating thrust loss when descending into the wake — **recorded (proposed, defer)**
+
+- **Equations:** T_i ← T_i·(1 − min(V/V_max, 1)·n_i·c²·k_pw), c = max(0, (cos∠(v_a, −ê_i) − c₀)/(1 − c₀)), n_i ∈ [0, 1] a 45 Hz low-passed simplex noise per rotor.
+- **Source:** `physics.cpp:516-552`; wind-relative after patch 0017.
+- **Parameters:** 5-inch preset: V_max = 20 m/s, c₀ = 0.1, k_pw = 1.1.
+- **Relevance:** the spec has the mean vortex-ring inflow (`vrs_empirical_inflow`) and no fluctuation.
+- **Notes:** at the racer's INTAKE axial points the loss is bounded by 21 % per rotor at 0.5 v_h descent and 84 % at 2 v_h, uncorrelated across rotors. Material by the 5 % threshold, but the numbers are a pilot-tuned stand-in (D25 lists vortex ring state as still open). Registry `propwash_thrust_unsteadiness`: no expression until a measured source exists.
+
+### Rotor-synchronous gyro vibration — **recorded (proposed, defer)**
+
+- **Equations:** per motor and axis A·(0.05 + damage)·(Ω/Ω_no-load)²·[sin φ + h₁·sin 2φ + h₂·sin 3φ], φ̇ = Ω, plus two frame-resonance sinusoids (210 and 420 Hz on the 5-inch preset, frequency jittered ±70 / ±60 Hz) gated on rotor speed; added to the gyro with a uniform white term, then a 500 Hz first-order low-pass.
+- **Source:** `physics.cpp:87-108, 377-498`.
+- **Parameters:** 5-inch preset: A = (8, 5, 4) rad/s, h₁ = 0.02, h₂ = 0.04, white half-range 0.005 rad/s.
+- **Notes:** 0.18 rad/s per motor at full throttle and 0.017 rad/s at hover on the roll axis — 36× and 3.3× the white term. The Ω² law is not derived (a rigid frame with rotor imbalance gives a rate amplitude ∝ Ω). Registry `imu_rotor_vibration`. The accelerometer gets no vibration term in SimITL (its accelerometer line sits under a `todo: validate and fix` comment).
+
+### Per-hub wind sampling from a spatially coherent gust field (libfpv patch 0017, `src/shared/world/wind.*`) — *skipped* (minor; sized)
+
+- **Equations:** the air velocity is sampled at the CoM (frame drag) and at each hub (inflow, rotor drag, propwash). Field: log profile u(z) = u₁₀·ln(z/z₀)/ln(10/z₀), z₀ = 0.3 m; five octaves of Perlin noise (60 m … 1.2 m) weighted (l/L)^(1/3)/√(1+(l/L)²), advected by the mean wind (frozen turbulence); intensity 1/ln(z/z₀); across-wind 0.8×, vertical 0.55×.
+- **Relevance:** this is the multirotor form of the skipped Dryden angular gusts (see that entry): a gust that differs between rotors makes a torque the spec's single wind vector cannot.
+- **Notes:** sized with the von Kármán transverse correlation at the MIL low-altitude scales (σ_w = 0.1·W20, L_w = h), through the k_z thrust channel: rms roll disturbance on RACER_5IN 0.6 / 0.9 / 1.8 / 2.7 rad/s² at 10 m for W20 = 5 m/s / light / moderate / severe, and 1.0 / 1.5 / 3.1 / 4.6 rad/s² at 2 m; CRAZYFLIE 0.8–6.0 rad/s² (placeholder k_z). Under 1 % of roll authority (625 rad/s²) in every case, and inside the ±3 rad/s² slow band the SkyDreamer disturbance schedule already injects. libfpv's own field has no energy below its 1.2 m octave, so it produces almost no inter-rotor difference on a 0.2 m airframe. The spec change would be small (a per-rotor wind input); the cost is harness-side, a gust generator correlated across four points. Reopen for flight within a few metres of the ground in strong wind, or a vehicle several times larger. The log profile is `wind_shear_log` with a metric z₀; the 1/ln(z/z₀) intensity is an alternative to the MIL closure.
+
+### Skipped subsystems (out of scope, dispositioned)
+
+- **Duct thrust gain** (patch 0013: +30 % static thrust on whoops, fading linearly to zero at half the zero-thrust inflow): a ducted-rotor vehicle class the spec has no reference vehicle for; heuristic. A candidate source once a ducted vehicle is carried.
+- **Slung cargo** (`flight.cpp:450-538`: point mass on an inextensible line, impulse-coupled through the quad's CoM, quadratic drag, winch): multi-body dynamics with extra state — outside the single-rigid-body spec.
+- **Contacts** (`flight.cpp:617-729`, `src/shared/world/collision.*`: sphere set, sequential impulses, Coulomb and torsional friction, restitution above a resting speed): a real contact model, but impulse-based and non-smooth — harness territory. Pointer for `ground_contact_heuristic`.
+- **Reversed props** (patch 0004: thrust × −0.5 in turtle mode), **prop damage**, **motor winding temperature** (I²R heating, airflow-scaled cooling, burn-out threshold; resistance does not depend on temperature, so no dynamics coupling): game state. Reversed thrust has the same disposition as PX4's reversible rotor above.
+- **Wind shelter probes, rotor-wake and jet sources, blast wave**: world-geometry heuristics with round-number constants; the wake column is a coarser alternative to `downwash_jain_jet`.
+- **Betaflight, RC link, video link, OSD, audio**: control and presentation.
+
+
+## rl-tools L2F (via rl-tools/hyperdrone @ 01eee73 and rl-tools/raptor @ 2c789df) — read-only intake 2026-11-15
+
+Both repositories carry no dynamics of their own: each pins rl-tools as a submodule and uses
+its L2F environment (`include/rl_tools/rl/environments/l2f/`). hyperdrone pins rl-tools
+ad2e56e (2026-10-30), raptor pins e43ae4b (2025-04-22); the newer pin adds an IMU error model,
+an ideal-rates actuation mode, a rate controller and more vehicle files. HyperDrone itself is
+a renderer plus this simulator; RAPTOR is a policy trained on it. Read, not executed.
+
+Convention traps: the "rpm" state and the thrust polynomial are in **normalized command
+units** (action limit 0–1), not rotor speed; `max_rpm = 10000` in every vehicle file is a
+stated visual placeholder; `rotor_torque_directions` is the torque sign = −spin (the F-6
+trap); quaternion wxyz, world z-up, body FLU (matches the spec).
+
+### Rigid body, thrust polynomial, torque ∝ thrust, arbitrary thrust axes — already covered
+
+- **Equations:** T_i = c₀ + c₁·u_i + c₂·u_i² along a per-rotor axis; τ = Σ r_i × T_i + κ_i·T_i·d̂_i; v̇ = g + R·ΣT/m; ω̇ = J⁻¹(τ − ω × Jω); RK4, optional substeps; quaternion renormalized after the step.
+- **Source:** `operations_generic/60_dynamics.h:29-67`, `70_post_integration.h:21-43`, `operations_generic.h:209-224`.
+- **Relevance:** `newton_euler`, `rotor_thrust_polynomial`, `rotor_torque_polynomial`, `thrust_axis_misalignment`, `rk4_fixed_step`. A strict subset of the verified tier: no drag of any kind, no rotor gyroscopics, no wind.
+
+### Asymmetric rising/falling motor lag with closed-form step — already covered
+
+- **Equations:** u̇ = (u_c − u)/τ, τ = τ_rise if u_c ≥ u else τ_fall; with `CLOSED_FORM`, u⁺ = α·u + (1 − α)·u_c, α = e^(−dt/τ).
+- **Source:** `60_dynamics.h:105-115`, `70_post_integration.h:304-315`.
+- **Relevance:** `motor_asymmetric_lag` (ka2 = kd2 = 0) and `motor_exact_exp_discretization`. The branch is chosen at the start of the step, which is exact under a held command because an exponential approach never crosses its setpoint.
+- **Parameters:** Crazyflie τ_rise 0.055 s, τ_fall 0.249 s (manufacturer plot); X500 0.054 s both ways.
+
+### IMU error model (hyperdrone pin only) — already covered; **flagged as golden-source opportunity**
+
+- **Equations:** b⁺ = α·b + σ·√(τ·(1 − α²)/2)·w, α = e^(−dt/τ); for τ ≤ 0: b⁺ = b + σ·√dt·w; σ = 0 holds the turn-on bias (uniform ±init_max). Gyro = ω + b + N(μ, std); accelerometer = Rᵀ·(Δv/dt − g) + b + N(μ, std) at the CoM.
+- **Source:** `70_post_integration.h:64-125`; parameters `multirotor.h:53-76` (all zero by default).
+- **Relevance:** identical to `spec.sensors.imu_bias_gauss_markov_step` (candidate `imu_stochastic_errors`), with the τ → ∞ limit as an explicit branch.
+- **Notes:** the first executable implementation of this term seen in intake that could be driven deterministically: a generator that compiles the header-only library with a stub RNG would give executed vectors and promote the term. Not built. White noise is a per-sample std (the spec's σ_nd/√dt). The accelerometer is a finite-difference specific force with no lever arm — `imu_measurement` at r = 0.
+
+### Ideal-rates actuation (hyperdrone pin only) — already covered
+
+- **Equations:** v̇ = g + R·(0, 0, c); ω set from the rate command, ω̇ = 0; c = (a + 1)/2 · (T/W) · g.
+- **Source:** `60_dynamics.h:68-81`, `00_actuation.h:56-59`.
+- **Relevance:** `point_mass_surrogate` (`spec.simplified.dynamics`), integrated with RK4 instead of the exponential map.
+
+### Skipped subsystems (out of scope, dispositioned)
+
+- **Constant random force and torque per episode**, **action noise**, **observation noise**, **angular- and linear-velocity observation delay**, **action history**: harness. The force std is scaled to the vehicle's surplus thrust-to-weight. An observation-side delay line is the counterpart of `command_transport_delay`.
+- **Mahony attitude filter, PD rate controller, rewards, trajectories**: estimation and control.
+- **Dynamics-parameter sampling** (`10_sample_initial_parameters.h:50-216`; RAPTOR ranges in `src/foundation_policy/pre_training/sample_dynamics_parameters.cpp`): thrust-to-weight uniform 1.5–5; mass 0.02–5 kg sampled uniformly in its cube root (size); arm length ∝ mass^(1/3) times a sampled deviation factor (parameter 0.1; as written the draw is `normal(−range, range)` passed to a (mean, std) sampler, so it is centred on −0.1, not zero); inertia set from a sampled torque-to-inertia ratio 40–1200 rad/s²; torque constant 0.005–0.05 m; disturbance force up to 0.3× the surplus thrust-to-weight. A physically coupled randomization scheme — a pointer for the SkyFlow harness, not spec math.
+- **Vehicle files** (`parameters/dynamics/`: crazyflie, crazyflie_brushless, x500, arpl, mrs, fs, flightmare, race, soft, savagebee_pusher, …; e.g. the Crazyflie at 31 g and the X500 at 2 kg): mass, inertia, geometry, thrust curve and motor time constants. Not usable as reference vehicles for Ω-dependent terms (k_d·Ω, I_rot·Ω): the curves are in command units and no rotor-speed scale is recorded.
+- **HyperDrone rendering, camera outputs, collision probes** (ray probes against a collision radius; no contact dynamics found): not dynamics.
 
 
 ## Findings from use (finding-driven intake, INTAKE.md) — 2026-10-04
