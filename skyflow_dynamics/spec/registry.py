@@ -142,6 +142,14 @@ SOURCES = {s.key: s for s in [
            "Ring State, AIAA 2011-1254: APC 9-11 in propellers at 4000 rpm, thrust against "
            "negative advance ratio (Figs. 4 and 11 checked; no torque was measured)",
            "https://m-selig.ae.illinois.edu/pubs/ShettySelig-2011-AIAA-2011-1254-LRN-VSR-Props.pdf"),
+    Source("shetty2011thesis", "Shetty — Measurements of Small-Scale Propellers Operating in "
+           "the Vortex Ring State, M.S. thesis, UIUC 2011: Appendix B tabulates C_T(J) at "
+           "4000 rpm for 24 APC 9-11 in propellers down to J = −0.8, Appendix A their chord "
+           "and twist (read here; pinned by sha256 in tools/descent_data.py, F-35)",
+           "https://hdl.handle.net/2142/18400"),
+    Source("uiucprop", "Selig et al. — UIUC Propeller Data Site, Volume 1: static C_T(rpm) "
+           "of the same APC propellers, same lab and tunnel (the hover normaliser for F-35)",
+           "https://m-selig.ae.illinois.edu/props/volume-1/propDB-volume-1.html"),
     Source("veismann2022", "Veismann, Yos, Gharib — Parametric study of small-scale rotors in "
            "axial descent, Physics of Fluids 34, 035124, 2022: 6 in printed rotors of varied "
            "pitch, chord and taper at constant rotor speed (read by the literature search)",
@@ -788,7 +796,11 @@ TERMS = (
          "table at J = 0, or k_z from flight data. Measured C_a: 0.27–0.63. Valid while the "
          "blade is not stalled: with the inflow REDUCED (ground effect, the first part of a "
          "descent) the measured gain is about half the law's, and past a descent ratio of "
-         "2 (flow up through the disk) the law overshoots thrust by 0.2–0.4 of hover. To "
+         "2 (flow up through the disk) the law overshoots thrust by 0.2–0.4 of hover. F-35: "
+         "fitted to 18 tabulated descent curves (with vrs_johnson_inflow) s has median 0.44, "
+         "IQR 0.36–0.67 — inside the ground-effect C_a range, so one s serves both; s from "
+         "geometric pitch does not (0.4–3.3 on cambered low-pitch APC propellers, which have "
+         "a negative zero-lift angle). Identify s from data, not from the pitch. To "
          "verify: C_T(J) tables that reach negative J, or a descent test at constant speed.",
          evidence=("analytic",),
          decision="pursue",
@@ -805,7 +817,8 @@ TERMS = (
          "spec.descent.johnson_baseline_cubic, spec.descent.johnson_transition_points, "
          "spec.descent.momentum_inflow_residual, spec.descent.momentum_inflow_slope, "
          "spec.descent.momentum_inflow_axial, spec.descent.johnson_inflow_time_constant",
-         ("johnson2005", "veismann2023", "veismann2022", "shetty2011", "foster2017"), (),
+         ("johnson2005", "veismann2023", "veismann2022", "shetty2011", "shetty2011thesis",
+          "uiucprop", "foster2017", "neurobem"), (),
          ("properties/test_wake.py",),
          "Johnson's parametric model, implemented from Table 3 with the constants of Table "
          "4; reproduces the report's Fig. 37 (V_x = 0.75: maximum 0.85 near −1.1, minimum "
@@ -830,9 +843,21 @@ TERMS = (
          "helicopter identification extrapolated by R/v_h; nothing at small scale tests "
          "it. Free-vortex and vorticity-transport simulations put full VRS development at "
          "20–25 revolutions, so a short pass through the band meets less than the "
-         "quasi-steady loss. To verify: a published or measured thrust curve as a dataset "
-         "(the read-offs here are ±0.02), or an executed reference.",
-         evidence=("analytic", "derived"),
+         "quasi-steady loss. F-35 (tools/descent_data.py, Shetty's thesis tables, 18 APC "
+         "propellers): the measured minimum sits at a descent ratio of 0.87–1.24 and Table 4 "
+         "puts it 0.15–0.42 later on every propeller that dips. With three parameters per propeller — "
+         "s, a scale k on the points D, N, X, E, and (V+v)_X — every curve fits to ≤ 0.09 "
+         "rms (median 0.03). Held out (one propeller left out, (k, peak) from the others, s "
+         "fitted): median 0.055 rms against 0.118 for the backend's linear law with its slope "
+         "fitted; better on 16 of 18 (the two exceptions are high-pitch propellers that barely "
+         "dip). But k does not transfer between labs: 0.69–0.83 for the UIUC set, 0.93–0.97 "
+         "for Veismann's FPV rotors, and the UIUC constants on those do no better than the "
+         "backend. So k and (V+v)_X are propeller-family parameters, like c_T; for 5 in FPV "
+         "propellers the FPV set gives k ≈ 0.95, (V+v)_X ≈ 1.4–1.8. NeuroBEM flight data "
+         "reach a descent ratio of 0.8 near-axially and show a 0.04 dip at 0.4–0.5 — the band "
+         "onset, not decisive for k. To verify for a vehicle: a thrust curve of ITS propeller "
+         "family at constant speed (the UIUC tables verify the form for the APC family only).",
+         evidence=("analytic", "derived", "published"),
          decision="pursue",
          effect=("axial descent at 0.5 / 2 v_h, constant speed, s = 0.5: T/T_static 1.06 / "
                  "about 1.2 (the law overshoots past 2), and 0.91 at the minimum near 1.4 — "

@@ -1409,6 +1409,67 @@ Every size quoted is reproduced by `tools/wake_triage.py` and pinned in
   the ground and interference terms added in the inflow, thrust from the linear law. That
   replaces the k_z thrust channel; it must not be added on top of it.
 
+### F-35 (the vortex-ring location is a propeller-family parameter) — **public data, notes on 2 candidate terms**
+
+Source: Shetty's M.S. thesis (UIUC 2011, hdl 2142/18400) — the data behind Shetty & Selig
+2011. Appendix B tabulates C_T(J) at ≈ 4000 rpm for 24 APC 9–11 in propellers down to
+J = −0.8; Appendix A tabulates chord and twist. The hover normaliser is the static C_T of the
+same propellers on the UIUC Propeller Data Site (same lab). 18 propellers have both (the
+11×3.8 is excluded: its descent C_T exceeds its static C_T everywhere). Tables, not figure
+read-offs. `tools/descent_data.py` fetches them, checks sha256, parses, fits, and freezes
+`golden/checkdata/descent_curves.json`; `properties/test_wake.py` checks it.
+
+| | UIUC APC set (18) | Veismann FPV rotors (3, read-offs) |
+|---|---|---|
+| measured minimum T/T_static | 0.61–1.04 at x = 0.87–1.24 (10×10: 0.98, no dip) | 0.70–0.78 at x = 1.20–1.25 |
+| Table 4 + blade-element s: minimum at, rms (x ≤ 1.75) | 1.29–1.43 (0.15–0.42 late), 0.09–0.31 | 1.38–1.43, 0.07–0.09 |
+| 3 parameters (s, k, (V+v)_X): rms | 0.013–0.087, median 0.031 | 0.027–0.044 |
+| VRS-location scale k | 0.69–0.83 | 0.93–0.97 |
+| (V+v)_X | 0.91–2.89, median 1.36 | 1.39–1.83 |
+| s | median 0.44 (IQR 0.36–0.67) | 0.29–0.92 |
+
+- **Held out** (leave one propeller out; (k, peak) = the others' median; ONE free parameter
+  per propeller for both models — s for Johnson, the slope for the backend's linear law):
+  Johnson median rms 0.055, backend 0.118; Johnson better on 16 of 18. The two exceptions
+  (Sport 9×7, 9×8) are high-pitch propellers that barely dip.
+- **Cross-lab:** the UIUC (k, peak) on Veismann's rotors: 0.10–0.125 rms, no better than the
+  backend (0.07–0.12). The location does not transfer. Possible causes, not resolved: the
+  closed 2.8 × 4 ft tunnel against an open jet (wall constraint on the recirculating wake),
+  propeller family, Reynolds number (≈ 4000 rpm on 9–11 in against 5–6 in at FPV speeds).
+- **Consequence:** the Johnson shape with the linear law is the right structure (it halves
+  the error within a family), but k and (V+v)_X are per-family parameters, like c_T. For
+  5 in FPV propellers use Veismann's set (k ≈ 0.95, (V+v)_X ≈ 1.4–1.8). The fitted s agrees
+  with the ground-effect C_a range (0.27–0.63): one parameter serves both. s from geometric
+  pitch does not (up to 3.3 on low-pitch cambered propellers).
+- **NeuroBEM** (the RACER_5IN data): near-axial samples (in-plane speed < 0.3·v_h, steady
+  rotor speed) reach a descent ratio of 0.8; about 5 s of data past 0.4. Thrust per Ω² rises
+  from 0.85 at x = −0.5 to 0.99 at 0.2–0.3, dips to 0.95 at 0.4–0.5 (confidence intervals
+  touch) and rises to 1.05 at 0.6–0.8, where frame drag grows. Onset of the band at about
+  0.4; it cannot decide k. The frame's vertical drag is not separable from k_z here (F-30).
+
+### Public data survey — 2026-11-16
+
+What exists for the own-wake terms, checked by download unless marked.
+
+| Data | What it has | Use here |
+|---|---|---|
+| Shetty thesis + UIUC Propeller Data Site | C_T(J ≤ 0) tables, 24 APC 9–11 in; static C_T; geometry | **F-35** (used) |
+| NeuroBEM, UZH-RPG (download.ifi.uzh.ch/rpg/NeuroBEM) | 1h15 agile flight, 400 Hz, motor speeds, Vicon; RACER_5IN | descent onset (used); max x 0.8, never near the ground |
+| Veismann thesis (Caltech 2022) / papers | thrust curves 4–6 in, figures and Table 1 | in `wake_triage.py` as read-offs; authors' data not public |
+| IDSIA nano-drone sys-id benchmark (github idsia-robotics) | Crazyflie 2.1 Brushless, 100 Hz, motor rad/s from bidirectional DShot, mocap | lowest altitude 0.5 m (≈ 18 R), descent ≤ 2 m/s (x ≤ 0.45): no ground effect, no VRS |
+| NanoBench (github syediu, 2026) | Crazyflie 2.1, 170 trajectories, PWM only (no rpm) | not checked further |
+| Blackbird, MIT | 10 h aggressive flight, rotor tachometers ≈ 190 Hz, mocap | server unreachable 2026-11-16 (4.9 TB set); not checked |
+| 4TU "quadrotor launched in the air" (Blaha et al. 2024) | Betaflight logs (.bfl) of a small quad, csv | not checked; thrown launches, no ground segment |
+| TII "Race Against the Machine" (github tii-racing) | Betaflight racer > 21 m/s, mocap, motor commands | rpm not confirmed; not checked |
+| Neural-Fly (github aerorobotics) | wind-tunnel flights, Caltech | fan duty cycle, rotor rpm not confirmed |
+| PX4 Flight Review (logs.px4.io, CC-BY) | 490 907 public logs, 335 218 quadrotor | 16 sampled: real ESC rpm in 2, rangefinder data in 6, both in 1 (DEXI 5); default logging gives rpm at 4 Hz, range at 1 Hz — too slow for ground effect without mining thousands of logs |
+| Ground effect: Neural Lander, Kan et al., ZJU ground-effect controller | flight data near the ground | not released (ZJU: "to be uploaded") |
+
+Gaps that remain: a whole-vehicle ground-effect log (hover at several heights with rotor
+speed at ≥ 50 Hz), any descent data at Crazyflie scale, a constant-speed descent curve of a
+5 in FPV propeller as a dataset, and propwash fluctuation data on a vehicle with rotor-speed
+telemetry. All four are cheap to record with one Betaflight quad with bidirectional DShot.
+
 
 ## Findings from use (finding-driven intake, INTAKE.md) — 2026-10-04
 

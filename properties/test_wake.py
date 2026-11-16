@@ -10,8 +10,11 @@ Part 2 — findings F-32 to F-34 and the triage sizes the registry quotes
 (tools/wake_triage.py). The measured values there are figure and table read-offs; the
 tolerances here are the sizes the ledger states, not a validation of the models."""
 
+import json
 import math
+import pathlib
 
+import numpy as np
 import pytest
 import sympy as sp
 
@@ -324,3 +327,79 @@ def test_rear_rotor_interference_sizes():
     assert slow["thrust_change"] == pytest.approx(-0.102, abs=0.005)
     assert cruise["thrust_change"] == pytest.approx(-0.124, abs=0.005)
     assert abs(fast["thrust_change"]) < 0.005
+
+
+# ---------------------------------------------------------------- F-35: tabulated descent data
+# golden/checkdata/descent_curves.json, frozen by tools/descent_data.py from Shetty's thesis
+# tables (UIUC 2011, pinned by sha256) and Veismann's read-offs. The data are not
+# redistributed; these tests check the frozen fits and that the spec still reproduces them.
+
+DESCENT = json.loads((pathlib.Path(__file__).resolve().parent.parent / "golden" / "checkdata"
+                      / "descent_curves.json").read_text())
+UIUC = [c for c in DESCENT["curves"] if c["lab"] == "UIUC"]
+CALTECH = [c for c in DESCENT["curves"] if c["lab"] != "UIUC"]
+
+
+def test_f35_measured_minimum_comes_earlier_than_table_4():
+    """18 APC propellers: the thrust minimum sits at a descent ratio of 0.87–1.24; Johnson's
+    Table 4 with blade-element s puts it 0.15–0.42 later on every one that dips."""
+    assert len(UIUC) == 18
+    for c in UIUC:
+        x_meas = c["measured_min"][0]
+        if c["name"].endswith("Sport Propeller 10x10"):     # barely dips: 0.98 at the first point
+            continue
+        assert 0.85 <= x_meas <= 1.25, c["name"]
+        assert c["table4_min"][0] > x_meas + 0.1, c["name"]
+
+
+def test_f35_location_is_a_propeller_family_parameter():
+    """Three free parameters (s, k, peak) fit every curve to ≤ 0.09 rms (median ≈ 0.03,
+    against ≈ 0.15 with Table 4). The VRS-location scale k is tight within each lab and
+    differs between them: 0.69–0.83 for the UIUC APC set, 0.93–0.97 for Veismann's FPV rotors."""
+    fits = [c["fit"] for c in DESCENT["curves"]]
+    assert max(f["rms"] for f in fits) < 0.09
+    assert np.median([f["rms"] for f in fits]) < 0.04
+    assert np.median([c["table4_rms"] for c in DESCENT["curves"]]) > 0.13
+    assert all(0.65 <= c["fit"]["k"] <= 0.85 for c in UIUC)
+    assert all(0.90 <= c["fit"]["k"] <= 1.00 for c in CALTECH)
+
+
+def test_f35_held_out_beats_backend_within_a_family_not_across():
+    """Leave one propeller out, one free parameter each (s; the backend's slope): Johnson
+    with the others' median (k, peak) halves the backend's error and wins on 16 of 18. The
+    UIUC constants do NOT transfer to the FPV rotors."""
+    ho = np.array([[c["held_out"]["rms"], c["held_out"]["backend_rms"]] for c in UIUC])
+    assert np.median(ho[:, 0]) < 0.5 * np.median(ho[:, 1])
+    assert int((ho[:, 0] < ho[:, 1]).sum()) >= 16
+    cross = np.array([[c["cross_lab"]["rms"], c["cross_lab"]["backend_rms"]] for c in CALTECH])
+    assert np.median(cross[:, 0]) > 0.9 * np.median(cross[:, 1])
+
+
+def test_f35_descent_sensitivity_matches_ground_effect():
+    """Fitted s (median 0.44) lies in the ground-effect C_a range 0.27–0.63 — one parameter
+    behind both, as inflow_thrust_law says. Blade-element s from geometric pitch does not
+    (cambered, low-pitch propellers: up to 3.3)."""
+    s_fit = np.median([c["fit"]["s"] for c in UIUC])
+    assert 0.27 <= s_fit <= 0.63
+    assert max(c["s_blade_element"] for c in UIUC) > 3.0
+
+
+def test_f35_frozen_fits_reproduce_from_the_spec():
+    """The spec's Johnson inflow with the frozen (s, k, peak) gives the frozen minimum."""
+    from tools import descent_data as dd
+    for c in (UIUC[1], UIUC[-1], CALTECH[1]):
+        f = c["fit"]
+        x, y = dd.model_minimum(f["s"], f["k"], f["peak"])
+        assert x == pytest.approx(f["model_min"][0], abs=0.011)
+        assert y == pytest.approx(f["model_min"][1], abs=0.002)
+
+
+def test_neurobem_near_axial_descent_envelope():
+    """NeuroBEM reaches a descent ratio of 0.8 near-axially (about 5 s of data past 0.4).
+    Thrust per Ω² rises from climb to x ≈ 0.3, dips about 0.04 at 0.4–0.5 (onset of the band;
+    the confidence intervals touch), and rises again where frame drag grows. Consistent with
+    both k = 0.74 and k = 0.95 — it does not decide the location."""
+    bins = {tuple(b["x"]): b for b in DESCENT["neurobem_near_axial"]}
+    assert bins[(0.2, 0.3)]["ratio"] - bins[(0.4, 0.5)]["ratio"] == pytest.approx(0.04, abs=0.015)
+    assert bins[(-0.6, -0.4)]["ratio"] < bins[(0.0, 0.1)]["ratio"] < bins[(0.2, 0.3)]["ratio"]
+    assert sum(b["n"] for b in DESCENT["neurobem_near_axial"] if b["x"][0] >= 0.4) < 1500
