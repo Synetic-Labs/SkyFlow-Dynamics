@@ -7,7 +7,11 @@ canonical hub velocity v + ω×r it damps and stiffens with rate; with agilib's 
 
 RACER_5IN / F-30 — the reference vehicle's values match the frozen identification
 (tools/identify_neurobem.py → golden/checkdata/neurobem_racer.json); its BEM-derived k_z
-reproduces without the flight data; the flight data's moments do not close."""
+reproduces without the flight data; the flight data's moments do not close.
+
+Source triage 2026-11-15 (libfpv / SimITL, rl-tools l2f; tools/sim_source_triage.py) — the
+sizes quoted in REFERENCES.md and in the registry entries rotor_imbalance_vibration,
+propwash_thrust_unsteadiness, rotor_gust_gradient and rotor_drag_hforce."""
 
 import json
 import math
@@ -17,6 +21,7 @@ import pytest
 
 from skyflow_dynamics.spec.parameters import RACER_5IN
 from tools import bem_rate_damping as brd
+from tools import sim_source_triage as triage
 
 RATES = (1.0, 13.0, 200.0)
 
@@ -107,3 +112,62 @@ def test_f30_moments_do_not_close():
     doc = json.loads(RACER_JSON.read_text())
     geometric = 0.13 / math.sqrt(2)
     assert doc["implied_roll_arm"] < 0.2 * geometric
+
+
+# ---- source triage 2026-11-15: libfpv / SimITL and rl-tools l2f (tools/sim_source_triage.py) ----
+
+def test_rotor_drag_prior_overstates_measured_racer():
+    """libfpv's k_d = 0.6·√(ρ·A·c_T/2) against the racer's measured k_d (κ = 0.40)."""
+    kappa = triage.rotor_drag_kappa(RACER_5IN)
+    assert kappa == pytest.approx(0.397, abs=0.002)
+    assert 0.6 / kappa == pytest.approx(1.51, abs=0.02)
+    assert triage.rotor_drag_kappa(triage.CRAZYFLIE) == pytest.approx(0.217, abs=0.002)
+
+
+def test_pitch_thrust_closure_fails_against_executed_table():
+    """libfpv's C_T(J) = C_T0·(1 − (J/J0)²), J0 = 0.9·pitch/D, puts zero thrust where the
+    executed APC 9x4.5E table still gives half the static value."""
+    e = triage.pitch_closure_error()
+    assert e["J0"] == pytest.approx(0.45)
+    assert e["rms"] == pytest.approx(0.288, abs=0.005)
+    assert e["worst"] == pytest.approx(0.49, abs=0.01)
+    assert e["table_CT_at_J0"] == pytest.approx(0.50, abs=0.02)
+
+
+def test_gust_gradient_is_minor():
+    """Per-rotor gust differences (libfpv patch 0017; the multirotor form of the skipped
+    Dryden angular gusts): under 1 % of roll authority up to severe turbulence at 2 m."""
+    assert triage.gust_gradient(RACER_5IN, 5.0, 10.0)["roll_accel_rms"] == \
+        pytest.approx(0.59, abs=0.01)
+    worst = triage.gust_gradient(RACER_5IN, triage.W20_LEVELS["severe"], 2.0)
+    assert worst["roll_accel_rms"] == pytest.approx(4.63, abs=0.05)
+    assert worst["roll_accel_rms"] < 0.01 * worst["roll_authority"]
+    cf = triage.gust_gradient(triage.CRAZYFLIE, triage.W20_LEVELS["severe"], 2.0)
+    assert cf["roll_accel_rms"] < 0.01 * cf["roll_authority"]
+
+
+def test_simitl_propwash_and_vibration_sizes():
+    """SimITL's hand-tuned constants at the INTAKE operating points (sizes, not measurements)."""
+    _, v_h = triage.hover(RACER_5IN)
+    assert v_h == pytest.approx(7.66, abs=0.01)
+    assert triage.simitl_propwash_loss(0.5 * v_h) == pytest.approx(0.21, abs=0.005)
+    assert triage.simitl_propwash_loss(2 * v_h) == pytest.approx(0.84, abs=0.005)
+    assert triage.simitl_propwash_loss(2 * v_h, cos_into_wake=0.1) == 0.0
+    vib = triage.simitl_vibration()
+    assert vib["full"] / vib["white"] == pytest.approx(36, abs=1)
+    assert vib["hover"] / vib["white"] == pytest.approx(3.3, abs=0.1)
+    assert triage.simitl_angular_damping_fraction(200.0) < 0.005
+
+
+def test_measured_propwash_sizes():
+    """Veismann et al. 2023 fluctuation levels on the racer (independent-rotor bound)."""
+    assert triage.measured_propwash_sigma(0.5, 0.17) == pytest.approx(0.08, abs=0.005)
+    assert triage.measured_propwash_sigma(1.25, 0.20) == pytest.approx(0.20)
+    lo = triage.measured_propwash_roll(RACER_5IN, 0.14, 0.76)
+    hi = triage.measured_propwash_roll(RACER_5IN, 0.20, 0.67)
+    assert lo["roll_accel_rms"] == pytest.approx(15.0, abs=0.5)
+    assert hi["roll_accel_rms"] == pytest.approx(18.8, abs=0.5)
+    assert 0.02 < lo["fraction_of_authority"] < hi["fraction_of_authority"] < 0.035
+    # SimITL's stand-in keeps growing where the measurement has already peaked
+    _, v_h = triage.hover(RACER_5IN)
+    assert triage.simitl_propwash_loss(2 * v_h) > triage.simitl_propwash_loss(1.25 * v_h)

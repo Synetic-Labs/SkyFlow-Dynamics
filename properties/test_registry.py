@@ -89,7 +89,7 @@ def test_use_matches_backend():
             called.add(f"spec.{module}.{frame.f_code.co_name}")
 
     factories = (B.statedot_fn, B.rk4_step_fn, B.exact_exp_step_fn, B.imu_fn,
-                 B.throttle_to_speed_fn)
+                 B.throttle_to_speed_fn, B.imu_bias_step_fn)
     for f in factories:
         f.cache_clear()
     p = B.pack_params(CRAZYFLIE)
@@ -103,6 +103,7 @@ def test_use_matches_backend():
         B.exact_exp_step_fn(4)(s, u, p, 1e-3)
         B.imu_fn(4, "first_order")(s, u, p, jnp.zeros(3), jnp.eye(3).reshape(-1))
         B.throttle_to_speed_fn()(0.5, 100.0, 2000.0, 0.5)
+        B.imu_bias_step_fn()(jnp.zeros(3), jnp.ones(3), 300.0, 0.01, 1e-3)
     finally:
         sys.setprofile(None)
 

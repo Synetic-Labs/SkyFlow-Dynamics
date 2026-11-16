@@ -70,3 +70,38 @@ def rotor_inertia_moment(w: sp.Matrix, W: sp.Matrix, W_dot: sp.Matrix, p) -> sp.
     h = p.I_rot * sum(p.spin[i] * W[i] for i in range(p.n)) * EZ
     reaction = -p.I_rot * sum(p.spin[i] * W_dot[i] for i in range(p.n)) * EZ
     return -cross(w, h) + reaction
+
+
+def rotor_imbalance_wrench(W: sp.Matrix, theta: sp.Matrix, U: sp.Matrix, p) -> tuple:
+    """
+    (F_B, M_B) from rotor mass imbalance — the source of the rotation-frequency lines in the
+    accelerometer and gyro. A rotor whose centre of mass sits off its axis (imbalance
+    U_i = m_u·r_u, kg·m) pulls on its shaft with a force that turns with the rotor:
+
+        F_i = U_i · Ω_i² · (cos θ_i, sin θ_i, 0)        body frame, in the rotor plane
+        F_B = Σᵢ F_i ,   M_B = Σᵢ r_i × F_i
+
+    θ_i is the rotor's phase about ẑ_B (θ̇_i = s_i·Ω_i — a harness-side state; the spin sign
+    only sets the sense of rotation). With c_T·Ω² = T the force is (U_i/c_T)·T_i: it scales
+    with thrust. Each F_i has constant magnitude and zero mean over a revolution, so the
+    term leaves the mean flight path alone and adds lines at Ω_i/2π: an in-plane
+    accelerometer amplitude U_i·Ω_i²/m, and — for hubs in the plane of the centre of mass —
+    a pure yaw torque of amplitude |r_i|·U_i·Ω_i², i.e. a yaw-rate amplitude
+    |r_i|·U_i·Ω_i/J_zz. Roll and pitch lines need a hub height r_i,z ≠ 0.
+
+    Source: Ghalamchi, Jia, Mueller (2020) eq. (4) for F_i and eq. (5) for the accelerometer;
+    they assume a rigid body and an accelerometer at the centre of mass, and model no
+    moment. The r_i × F_i moment here is plain rigid-body mechanics, not their result.
+    ⚠ Rigid-frame, first harmonic only: frame flexibility changed their estimate of one
+    damaged propeller by a factor of two between two airframes, and higher harmonics and
+    blade-pass aerodynamic loads are not modelled. Assumes rotor planes normal to ẑ_B (like
+    rotor_inertia_moment, it does not follow a tilted axis ê_i). Stiff: resolving the line
+    needs a step well below 1/Ω.
+    """
+    F = sp.zeros(3, 1)
+    M = sp.zeros(3, 1)
+    for i in range(p.n):
+        F_i = U[i] * W[i] ** 2 * sp.Matrix([sp.cos(theta[i]), sp.sin(theta[i]), 0])
+        F += F_i
+        M += cross(p.rotor_pos[i], F_i)
+    return F, M
