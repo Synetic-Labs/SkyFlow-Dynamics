@@ -3,11 +3,16 @@ Ground effect and vehicle-to-vehicle downwash — CANDIDATE tier.
 
 Credible published models, symbolically checked and cited; not yet validated against a
 runnable reference by golden vectors (the reference implementations we golden against model
-neither effect). Promotion path: freeze vectors from gym-pybullet-drones or bench data.
+neither effect). Promotion path: bench or flight data at constant rotor speed.
 
 All heights z are the rotor-plane height above ground along the ground normal (m); R is the
-rotor radius (m). Ratios are multiplicative on thrust at fixed rotor speed/power — except
-talbot_inflow_factor, which scales the induced VELOCITY (use one route, never both).
+rotor radius (m). WHAT IS HELD CONSTANT differs between the forms and decides which one
+applies: cheeseman_bennett, cheeseman_bennett_forward and sanchez_cuevas are at constant
+POWER; he_leang_exponential and cheeseman_bennett_fixed_pitch are at constant ROTOR SPEED
+— the condition of an ESC-driven fixed-pitch propeller, and the forms measurement supports
+there (REFERENCES.md, F-33). The ground acts on the induced velocity: the constant-speed
+forms are spec.inflow.inflow_thrust_ratio over a ground_inflow_fraction_*. Use ONE route
+for a rotor, never two.
 """
 
 import sympy as sp
@@ -33,10 +38,83 @@ def cheeseman_bennett_forward(z: sp.Expr | float, R: sp.Expr | float, V: sp.Expr
     Forward-flight generalization — ground effect washes out with horizontal speed V:
 
         T_IGE / T_OGE = 1 / (1 − (R/(4z))² · 1/(1 + (V/v_i)²)),   v_i = √(T/(2ρA)) hover
-    Source: Cheeseman & Bennett 1955 (commonly cited form; verify against R&M 3021 before
-    promotion — flagged by the intake sweep).
+    At CONSTANT POWER; Z is the height of the rotor hub; the washout comes from a directional
+    image source whose strength is fixed to agree with the hover form. The report's own
+    flight tests "agree fairly well with the theory" above Z/R = 0.6, but the measured
+    effect falls off faster with speed at first.
+    Source: Cheeseman & Bennett, ARC R&M 3021 (1955), Eq. (4), read from the report
+    (2026-11-16). For a fixed-pitch rotor at fixed speed use cheeseman_bennett_fixed_pitch.
     """
     return sp.sympify(1 / (1 - (R / (4 * z))**2 / (1 + (V / v_i)**2)))
+
+
+def ground_inflow_fraction_image(z: sp.Expr | float, R: sp.Expr | float,
+                                 V: sp.Expr | float = 0, v_i: sp.Expr | float = 1) -> sp.Expr:
+    """
+    Fraction of the induced velocity that the ground cancels at the rotor, image-source model:
+
+        δv_i / v_i = (R/(4z))² / (1 + (V/v_i)²)
+
+    (δv_i = A·v_i/(16πZ²) at hover.) Feed it to spec.inflow.inflow_thrust_ratio as
+    λ/λ_h = 1 − δv_i/v_i. Source: Cheeseman & Bennett, ARC R&M 3021 (1955), §2.1 and Eq. (3)
+    with k = 1/3, read from the report.
+    """
+    return sp.sympify((R / (4 * z))**2 / (1 + (V / v_i)**2))
+
+
+def ground_inflow_fraction_exponential(z: sp.Expr | float, R: sp.Expr | float,
+                                       C_b: sp.Expr | float) -> sp.Expr:
+    """
+    The same fraction, exponential in height and finite at the ground:
+
+        δv_i / v_i = exp(−C_b·z/R)
+
+    with δv_i = v_i at z = 0 (no flow through a rotor lying on the ground) — He & Leang's
+    Assumption 1 and Eq. (16). C_b is fitted: 1.18–2.87 on eleven fixed-pitch propellers
+    (mean 2.3; 1.80 for a three-blade 5×3); a rotor inside a quadrotor reaches higher (C_b up
+    to 30 % lower, their §IV.C). Source: He & Leang, AIAA J. 2020, Eq. (16), Table 2.
+    """
+    return sp.exp(-C_b * z / R)
+
+
+def he_leang_exponential(z: sp.Expr | float, R: sp.Expr | float, C_a: sp.Expr | float,
+                         C_b: sp.Expr | float) -> sp.Expr:
+    """
+    In-ground-effect thrust ratio of a fixed-pitch rotor at CONSTANT ROTOR SPEED — the
+    condition of an ESC-driven propeller, where the ratios above are at constant power:
+
+        K_G = T(z)/T_∞ = 1 + C_a·exp(−C_b·z/R)
+
+    Finite everywhere: 1 + C_a at the ground. C_a is the inflow sensitivity of the blade
+    (spec.inflow.inflow_thrust_sensitivity), so this IS spec.inflow.inflow_thrust_ratio over
+    ground_inflow_fraction_exponential. Measured on a thrust stand at constant speed and 13
+    heights, eleven propellers: C_a 0.27–0.63, C_b 1.18–2.87; thrust rose monotonically to
+    the ground with no drop. Three-blade 5×3 (R = 0.064 m): C_a = 0.53, C_b = 1.80, i.e.
+    +21.5 % / +8.8 % / +1.4 % at z/R = 0.5 / 1 / 2.
+    Source: He & Leang, "Quasi-Steady In-Ground-Effect Model for Single and Multirotor Aerial
+    Vehicles", AIAA J. 2020, doi 10.2514/1.J059223, Eqs. (3), (15), (16), Table 2 — read from
+    the author-hosted paper. Not covered: the body of a real vehicle (which adds lift, see
+    sanchez_cuevas) and the thrust-LOSS region the paper reports for bare rotor pairs at
+    tip gaps of 1.2–2.8 R and heights of 1.1–2.3 R (fountain re-ingestion, up to 8 %).
+    """
+    return sp.sympify(1 + C_a * ground_inflow_fraction_exponential(z, R, C_b))
+
+
+def cheeseman_bennett_fixed_pitch(z: sp.Expr | float, R: sp.Expr | float, s: sp.Expr | float,
+                                  V: sp.Expr | float = 0, v_i: sp.Expr | float = 1) -> sp.Expr:
+    """
+    Cheeseman & Bennett's own FIXED-PITCH, fixed-rotor-speed form — in the report, dropped by
+    the literature that cites it:
+
+        T_g/T_∞ = 1 + s·(R/(4z))² / (1 + (V/v_i)²),   s = ¼·(ρ·a·b·c·Ω²R³/T_∞)·λ
+
+    with T_∞ = ½·ρ·a·b·c·Ω²R³·(θ/3 − λ/2), so s = λ/(2θ/3 − λ): the same inflow sensitivity
+    as He & Leang's C_a. The blade-loading dependence the constant-power form lacks: a
+    lightly loaded high-pitch rotor (small s) gains less. Singular only at z = 0; the
+    report warns that the point-source image is poor at small Z/R.
+    Source: Cheeseman & Bennett, ARC R&M 3021 (1955), Eqs. (5)–(6), read from the report.
+    """
+    return sp.sympify(1 + s * ground_inflow_fraction_image(z, R, V, v_i))
 
 
 def sanchez_cuevas(z: sp.Expr | float, R: sp.Expr | float, d: sp.Expr | float, b: sp.Expr | float, K_b: sp.Expr | float) -> sp.Expr:

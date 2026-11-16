@@ -1055,6 +1055,361 @@ treat their numbers as leads until someone reads them again.
 - **Reported by the search (not re-read here):** de Alvear Cárdenas & de Visser, AIAA 2024-2816 — blade-element blade-damage model with the same centrifugal term plus CG-shift moments and aerodynamic loads; centrifugal forces one to three orders above the rest in-plane, aerodynamics dominating F_z and the moments. Firmware practice: Betaflight notches the first 3 harmonics of each motor (`rpm_filter_harmonics = 3`); ArduPilot documents a 180 Hz hover peak on a 5-inch quad "with a smaller second harmonic", vibration below 30 m/s² as acceptable, and a SITL source comment quoting 0.2–0.4 rad/s of gyro noise on a real 180 mm copter — the only gyro magnitude found, and anecdotal. No sim-to-real paper modelling rotor-harmonic IMU noise was found, consistent with SkyFlow's own 2026-08 search (SkyFlow ROADMAP.md).
 
 
+## Own-wake aerodynamics: descent and propwash, ground effect, rotor-on-rotor interference — evidence review 2026-11-16
+
+A review of what is known about a multirotor flying in air its own rotors have disturbed,
+and what the spec should carry. Four literature searches ran in parallel (descent and the
+vortex ring state; ground effect; rotor-on-rotor interference; transient wake and FPV
+"propwash"). They saved about 140 documents. Statements below are marked by how they
+were checked:
+
+- **read here** — read for this record from the saved document (page, equation or table).
+- **search-read** — read by a search agent from the primary document, not re-read here.
+  Treat the numbers as leads until someone reads them again.
+- **figure read-off** — taken from a plotted figure; good to about ±0.02 in a thrust ratio.
+
+Every size quoted is reproduced by `tools/wake_triage.py` and pinned in
+`properties/test_wake.py`.
+
+### What the evidence says
+
+1. **One parameter ties three effects together.** At fixed rotor speed the thrust of a
+   fixed-pitch rotor is linear in the flow through its disk, T/T_static = 1 − s·(λ/λ_h − 1).
+   The same blade sensitivity s sets the thrust gain near the ground, the thrust loss in the
+   vortex ring state, the loss of a rear rotor in a front rotor's wake, and the backend's
+   k_z term. Four of the sources print this law (He & Leang Eq. 15; Cheeseman & Bennett
+   Eqs. 5–6; Veismann Eq. 2.4; Nguyen Eq. 40). Measured s: 0.27–0.63 on eleven propellers.
+2. **Our descent model has the wrong sign (F-32).** Between descent rates of about 0.45 and
+   1.5 v_h a real fixed-pitch rotor loses thrust as it sinks faster. The backend and the
+   verified BEM model both gain thrust there.
+3. **Our ground-effect candidates disagree by a factor of twenty at one radius (F-33).**
+   Measurements at constant rotor speed settle it: +6 to +9 % for a rotor, +10 to +18 % for
+   a whole quadrotor. The Crazyflie-fitted gain (+71 %) is a far-field fit used out of range.
+4. **FPV propwash is two things.** Aerodynamic forcing is measured: per-rotor thrust noise
+   of 12–20 % rms at the worst descent rate, independent between rotors as far as anyone
+   has inferred. Loss of control authority at low rotor speed is the other half, and it
+   belongs to the motor and controller models. The one study that separated them on a
+   5-inch quadrotor found the forcing on the vehicle 2–8 times that of an isolated rotor.
+5. **The wake is fast; the vortex ring is slow.** Dynamic inflow settles in 1–4 ms on a
+   5-inch rotor, far inside the motor lag. The vortex ring state takes 20–25 revolutions
+   to develop (0.05–0.15 s), so a short pass through the band meets less than the steady
+   loss.
+6. **A rigid propeller in edgewise flow carries a nose-up hub moment (F-34)** of
+   0.13–0.22·T·R. The spec has the term; both reference vehicles ship it at zero.
+
+### F-32 (thrust in descent has the wrong sign in the backend and in BEM) — **new candidate terms**
+
+- **Method:** `tools/wake_triage.py`, check 1. The backend model (c_T·Ω² − k_z·Ω·V_z) and the
+  float-exact agilib BEM replica (`golden/generate/gen_agilicious.py`, quartic VRS inflow
+  and its executed blend included) at the hover rotor speed, vehicle level, descending
+  vertically.
+- **Result, T/T_hover at constant rotor speed:**
+
+  | descent / v_h | 0.5 | 1.0 | 1.2 | 1.5 | 2.0 |
+  |---|---|---|---|---|---|
+  | backend (RACER_5IN) | 1.09 | 1.17 | 1.21 | 1.26 | 1.34 |
+  | BEM + quartic | 1.09 | 1.15 | 1.18 | 1.40 | 1.79 |
+  | measured, HQProp 5×4 (Veismann 2023, Fig. 6) | 1.03 | 0.90 | 0.78 | 0.90 | 0.98 |
+
+- **Mechanism:** the quartic (Leishman's fit, `vrs_empirical_inflow`) gives a net flow
+  through the disk of 1.00 / 0.89 / 0.82 / 0.58 v_h at descent ratios 0 / 0.5 / 1.0 / 1.5:
+  it only falls, so the blade angle of attack only rises and thrust only rises. Measured
+  inflow rises instead — to about 1.6 v_h near a descent ratio of 1.4 (Veismann Fig. 8).
+- **Size:** 30–45 % of thrust at a descent ratio of 1.2–1.4, and the wrong sign of heave
+  damping across the band. The band is set by the CURRENT thrust: 3.5–11.6 m/s of descent
+  along the thrust axis on RACER_5IN at hover thrust, 7.4–24.5 m/s at full thrust,
+  1.0–3.2 m/s at idle.
+- **Outcome:** new candidate terms `vrs_johnson_inflow` and `inflow_thrust_law`, both
+  `pursue`; a note on `vrs_empirical_inflow`. Nothing changes in the backend.
+
+### F-33 (the ground-effect candidates span +3 % to +71 % at one rotor radius) — **new candidate term + triage of 4**
+
+- **Method:** `tools/wake_triage.py`, check 4, on RACER_5IN's geometry.
+- **Result, thrust gain:**
+
+  | z/R | Cheeseman–Bennett (constant power) | C–B fixed pitch, s = 0.53 | He & Leang 5×3 | Sanchez-Cuevas, K_b = 2 | pybullet, G = 11.37 |
+  |---|---|---|---|---|---|
+  | 0.5 | +33.3 % | +13.3 % | +21.5 % | +42.9 % | +284 % |
+  | 1 | +6.7 % | +3.3 % | +8.8 % | +15.8 % | +71.1 % |
+  | 2 | +1.6 % | +0.8 % | +1.4 % | +8.9 % | +17.8 % |
+  | 4 | +0.4 % | +0.2 % | +0.0 % | +3.7 % | +4.4 % |
+
+- **Measured at constant rotor speed:** single three-blade 5×3 propeller +21.5 / +8.8 /
+  +1.4 / 0 % at z/R = 0.5 / 1 / 2 / 4 (He & Leang, Table 2 fit — read here); Hummingbird in
+  free flight +31.6 / +13.6 / +6.4 / +3.1 % (Kan et al., reciprocal of Eq. 12 — equation
+  read here); tethered Crazyflie +18 % at 1.14R falling to +7 % at 2.85R (Carter et al.,
+  Fig. 2a — figure read-off, search-read).
+- **The fitted G:** the Crazyflie points need G = 3.7 at z/R = 1.14 and 9.1 at 2.85. A
+  1/z² law falls faster than the data; the shipped 11.37 is a far-field value.
+- **Talbot / JSBSim:** the decay rate is dimensional. 0.33 1/m is 0.021 per rotor radius on
+  RACER_5IN; the measured rate is 1.2–2.9 per radius.
+- **Outcome:** new candidate `ground_effect_fixed_rpm` (`pursue`).
+  `ground_effect_cheeseman_bennett`, `ground_effect_pybullet`,
+  `ground_effect_talbot_inflow`: `hold`. `ground_effect_sanchez_cuevas`: `defer` — its
+  body-lift term is what a bare-rotor form lacks.
+
+### F-34 (the hub moment of a rigid propeller in edgewise flow is nose-up; reference vehicles carry none) — **note on a verified term**
+
+- **Data (read here):** NASA/TM-2018-219758, Appendix C, isolated 3DR SOLO rotor (10 in),
+  0° pitch, 5700 rpm. Table C68a point 31: 19.34 ft/s, F_z 1.032 lb, M_y +0.875 in-lb.
+  Table C69a point 18: 39.59 ft/s, 1.218 lb, +1.358 in-lb. M_y is nose-up positive, about
+  the hub. Hover (C84a) shows an offset of 0.19 in-lb at this speed.
+- **Result:** M_y/(T·R) = 0.170 and 0.223 at advance ratios 0.078 and 0.159; 0.133 and
+  0.192 with the hover offset removed. Search-read support: 0.12 at μ = 0.14 from CFD
+  (Niemiec & Gandhi's RMAC validation, Table 2) and about 0.12 from a wind-tunnel propeller
+  study (Gill & D'Andrea 2019, Fig. 6).
+- **In this repo:** `flapping_moment` is M = −k_flap·Ω·(v × ẑ). The docstring already says
+  the sign must be pinned against data. The data give k_flap < 0, −k_flap/c_T = 1.2–2.2
+  (0.9 from the search-read sources).
+- **Size on RACER_5IN at 10 m/s:** 0.06–0.15 N·m nose-up, 30–73 rad/s², 2–5 % of pitch
+  authority — minor by the INTAKE thresholds, cheap, and the term is already in the backend.
+- **Limits:** the moment falls with nose-down tilt (the same tables give 0.067 and 0.112 at
+  −40°, points 5 and 6 — read here) and the linear form does not. The sources disagree on whether pitch exceeds
+  roll (Russell: pitch larger; Gill and the CFD: roll at least as large).
+- **Outcome:** note on `blade_flapping_moment`. The reference vehicles keep k_flap = 0: the
+  racer's flight data cannot identify moments (F-30), and the measured rotor is not its
+  propeller. A consumer with a wind tunnel or a clean fore/aft rotor-speed split can set it.
+
+### Johnson's vortex-ring-state inflow model — **ADOPTED (candidate tier): `vrs_johnson_inflow`**
+
+- **Equations (read here):** NASA/TP-2005-213477, text pp. 14–15, Table 3, Table 4. All
+  velocities over v_h = √(T/2ρA) of the current thrust; V_z positive in climb.
+  1. If V_z ≥ 0 or V_x ≥ V_xC: momentum theory, v·√(V_x² + (V_z+v)²) = 1.
+  2. Baseline: between V_zB' and V_zA' a cubic v = b·V_z + c·V_z² + d·V_z³ that matches
+     momentum theory's v and dv/dV_z at A and its v at B. V_zA' = V_zA + 0.2(V_x/V_xC)²,
+     V_zB' likewise, plus 0.7(V_zA' − V_zB')(2V_x/V_xC − 1)³ when V_x/V_xC > 0.5.
+  3. VRS increment for V_z < 0 and V_x < V_xM: three cubics in V_z between D, N, X, E for
+     Δ(V_z+v). Zero value and slope at D; at N and X the values
+     ((V_z+v)_N − (V_zN + v_mom))·(1 − (V_x/V_xM)⁶)^½ (and the same at X) with slope
+     −(1 + dv_base/dV_z), so the net inflow has zero slope there; zero value at E.
+     V_zN' = ½(V_zN+V_zX) + ½(V_zN−V_zX)(1 − (V_x/V_xM)²)^0.2, V_zX' with a minus sign and
+     the power 1.5, V_zE' = V_zE + (V_zX' − V_zX).
+  4. v = κ·(v_base + f·Δv_vrs). Lag: τ·dv/dt + v = v_QS, τ = 0.7/λ_h revolutions.
+- **Constants (Table 4):** V_zA −1.5, V_zB −2.1, V_xC 0.75, V_zD −0.2, V_zN −0.45,
+  (V+v)_N 0.85, V_zX −1.5, (V+v)_X 1.25, V_zE −2.0, V_xM 0.95. κ in the report's
+  comparisons: 1.05–1.20.
+- **Reading notes:** two misprints in Table 3 (the E end point is printed as D; the slope
+  term 3·d·V_z² is printed 2·c·V_z²) are read as the body text has them. "v_Nmom" is not
+  defined for V_x > 0; taking it in vertical descent at the unshifted point reproduces
+  Fig. 37's V_x = 0.75 curve (maximum 0.85 near −1.1, minimum 0.58 near −0.55), and taking
+  it at the current V_x does not (1.11).
+- **What the report says about itself:** "not intended to match any specific data set. The
+  lack of any dependence on rotor parameters such as solidity and twist is undoubtedly
+  significant." The instability "is defined by the character of the mean thrust and mean
+  power of the rotor in VRS, not the unsteadiness of the flow." Without the increment "the
+  helicopter is stable in vortex ring state." τ = 14 revolutions was identified on the
+  Dauphin D6075 (λ_h = 0.05) and scaled as R/v_h.
+- **Against small-rotor thrust at constant speed** (`tools/wake_triage.py`, check 2; s from
+  each rotor's published pitch and hover C_T):
+
+  | rotor | s | measured minimum | Table 4 | (V+v)_X fitted to the depth |
+  |---|---|---|---|---|
+  | HQProp 6×3 | 0.97 | 0.71 at 1.20 | 0.85 at 1.38 | 1.54: minimum at 1.26, rms 0.042 to x = 1.75 |
+  | HQProp 5×4 | 0.56 | 0.78 at 1.20 | 0.90 at 1.42 | 1.57: minimum at 1.32, rms 0.034 |
+  | Gemfan 4×4.5 | 0.44 | 0.70 at 1.25 | 0.91 at 1.44 | 2.02: minimum at 1.26, rms 0.087 |
+  | APC 10×5 | 0.99 | 0.81 at 1.07 | 0.85 at 1.38 | 1.32: minimum at 1.34, rms 0.132 |
+
+  Right sign and place, about half the depth with the helicopter constant. Past a descent
+  ratio of 2 the linear law overshoots by 0.2–0.4 of hover thrust (flow up through the
+  disk; the blade stalls). The APC 10×5 does not follow the shape: no initial rise, an
+  earlier and shallower dip, a faster recovery. Veismann's own check (Fig. 8, read here)
+  finds the measured inflow following Johnson's curve with κ = 1.15.
+- **Notes:** not continuous in V_x at V_xM — the slope conditions leave up to 0.15 v_h of
+  increment that drops out when V_x crosses 0.95 v_h. C¹ at D, N, X; value-only at E and B.
+
+### Thrust of small fixed-pitch rotors in descent — measured data on record
+
+- **Veismann, Dougherty, Gharib 2023** (read here; figure read-offs): 4, 5, 6 in rotors,
+  constant speed, open-jet vertical tunnel. Three features: a rise of 2–7 % up to a
+  descent ratio of 0.75; a loss between 0.75 and 1.8 with the minimum (0.67–0.76) at
+  1.2–1.3; recovery above hover beyond 1.8. T/T_h against v_c/v_h collapses across rotor
+  speed, rotor count and separations of 1.5 diameters and more. Table 1 (read here):
+  6×3 σ 0.1070, θ.75 10.82°, C_T 0.0077; 5×4 0.1261, 18.15°, 0.0116; 4×4.5 0.1221, 15.91°,
+  0.0063.
+- **Shetty & Selig 2011** (Figs. 4 and 11 read here; values search-read): APC Thin
+  Electric 10×5 at 4000 rpm falls to 0.81 of hover at a descent ratio of 1.07, passes
+  hover at 1.45 and reaches twice hover near 3. Higher pitch moves the minimum to faster
+  descent and makes it shallower; the 10×10 barely dips. No torque was measured.
+- **Veismann, Yos, Gharib 2022** (search-read): printed 6 in rotors; loss 6 % (taper 3) to
+  35 % (−6° pitch); fit min(T/T_h) = 0.35·ζ + 0.55, ζ = (C_T/σ)·aspect ratio, 0.3 < ζ < 1.
+- **Foster & Hartman 2017** (Figs. 8–9 read here): isolated 14 in rotor over
+  (V_x/v_h, V_z/v_h). Mean thrust falls to about 0.8 and the relative rms of 6 Hz
+  low-passed thrust peaks at 0.16–0.18 near V_x/v_h 0.4–0.5, V_z/v_h −0.9 to −1.2. Both
+  are gone by V_x/v_h ≈ 1 and V_z/v_h ≈ −1.5.
+- **Veismann et al., VFS Forum 77, 2021** (search-read; one sentence confirmed here): a
+  free-flying variable-pitch quadrotor over a vertical tunnel. Thrust falls to 0.8 at a
+  descent ratio of 1.2; attitude excursions grow from ±2° to over ±10° at 6 m/s, "explained
+  by asynchronous thrust fluctuations occurring at the various rotors".
+- **Where VRS ends with forward speed** (search-read except Johnson and Foster):
+  V_x/v_h ≈ 0.62 (Peters & Chen), 0.73 (Stack), 0.95 (Johnson), 1.0 (Drees, Washizu,
+  Foster), 1.14 (Newman). One outlier: Talaeizadeh et al. forbid every descent steeper
+  than 20° out to V_x/v_h ≈ 2.5.
+
+### Unsteady thrust in descent — **`propwash_thrust_unsteadiness` moves to candidate**
+
+- **Amplitude:** as in the 2026-11-15 entry below, plus: back to 0.06–0.08 at a descent
+  ratio of 2 (Veismann 2023, Fig. 7, read here); 0.18 at the minimum of the APC 10×5
+  (Shetty & Selig Fig. 11: the 3σ band is 0.032–0.118 about a mean of 0.078 — read here;
+  the paper's text says "approximately ±30 %" while its plotted extremes are −72 / +63 %).
+  rms over mean loss at the worst descent rate: 0.33–0.46 on the three Veismann rotors.
+- **Published form (read here):** Foster & Hartman Eq. (8),
+  C_T,VRS = C_T(μ_x, μ_z)·[1 + A_VRS·cos(ω_VRS·t + δ(t))], per motor, A from their Fig. 9,
+  δ a random-walk phase. They call it a prototype not based on induced velocity. A full
+  quadrotor at V_x/v_h = 0.51, V_z/v_h = −0.88 showed 15 % peak-to-peak at 1.35 Hz.
+- **Closure landed (derived):** `spec.descent.vrs_fluctuating_increment` — noise on the
+  VRS inflow increment. It inherits the footprint, the blade scaling and the forward-speed
+  cut-off from the mean model. It under-states the measured rms at descent ratios of 0.5
+  and 2.
+- **Spectrum:** isolated small rotors, f·R/v_h ≈ 0.02–0.1 (search-read: Foster 1–3 Hz at
+  14 in; Stack 20–50 revolutions). Johnson's review of large rotors (search-read): reduced
+  frequencies from under 0.1 to 5 with "no clear trends"; torque fluctuation under 2.5 %
+  where thrust fluctuates over 15 % (Azuma & Obata).
+- **Still missing:** the rotor-to-rotor correlation, a thrust spectrum above 15 Hz for a
+  3–6 in rotor, torque fluctuation at small scale, in-plane force and hub moment in VRS.
+
+### FPV "propwash": what it is — recorded
+
+- **Betaflight documentation** (search-read; one sentence confirmed here): "Propwash is
+  characterised by gyro oscillations in the 20-60hz range." Dynamic idle exists because in
+  a flat drop or a fast reversal "airflow is pushing into the props from below" and slows
+  them. Lower filter delay at low throttle is named as a remedy.
+- **Bogaerts, MSc thesis, TU Delft 2023** (conclusions read here; figures search-read): a
+  5 in quadrotor on Betaflight 4.2.9. Gyro spectra in vertical descent centre at
+  13–22 Hz and do not move with descent speed or rotor speed. Isolated-rotor thrust noise
+  peaks at advance ratios of 0.05–0.2. The thrust slope against rotor speed drops in the
+  band but stays positive. A closed-loop model (controller, motors, measured rotor maps)
+  driven by isolated-rotor forcing gets the frequencies and "orders of magnitude" too
+  little power. Forcing reconstructed on the flying vehicle is flat to 80 Hz and 2–8
+  times the isolated-rotor level. Conclusion: isolated-rotor aerodynamics, motor transients
+  and gyroscopics "are most certainly not the main cause"; rotor-rotor or rotor-frame
+  interaction is suspected and not modelled.
+- **Disagreement (search-read):** a PIV study of a quadrotor (Pickles et al.) finds that
+  close rotors merge into one vortex ring and that this REDUCES unsteadiness. Veismann
+  2023 finds 42 % more fluctuation for rotors tip to tip.
+- **Simulators:** FLIGHTLAB carries the Chen–Prasad ring-vortex model. No research
+  quadrotor simulator read (RotorS, Flightmare, AirSim, FlightGoggles, Agilicious, Swift)
+  has an unsteady wake term. Liftoff's developers call their effect artificial (forum
+  statement). SimITL's form is in the 2026-11-15 entry.
+- **Learned residuals:** NeuroBEM feeds 50 ms of history to its network "considering the
+  airflow as hidden state"; no paper tests wake memory or reports the residual by descent
+  rate.
+- **Relevance:** the forcing is a spec matter (`propwash_thrust_unsteadiness`); the
+  authority half comes from the rotor-speed floor, the motor model and the firmware loop.
+
+### Time scales: dynamic inflow and vortex-ring development — recorded (note on `dynamic_inflow_lag`)
+
+- **Dynamic inflow** (search-read from R.T.N. Chen, NASA TM-102219, Eqs. 13–21, and
+  Carpenter & Fridovich, NACA TN 3044): Pitt–Peters M = diag(8/(3π), −16/(45π),
+  −16/(45π)), L_hover = (1/v₀)·diag(½, −1, −1); for perturbations L₁₁ = 1/(4v₀), so
+  τ = (2/(3π))·R/v_h. Apparent mass 0.637·ρ·(4/3)πR³. On RACER_5IN 1.8 ms, on CRAZYFLIE
+  1.1 ms, against motor lags of 33 and 72 ms. Quadrotor papers that include inflow states
+  find them fast enough to condense out (Niemiec & Gandhi). No thrust overshoot has been
+  measured on a small fixed-pitch rotor.
+- **VRS development** (search-read): vorticity-transport simulations reach a developed
+  vortex ring 20–25 revolutions after the descent condition is entered (Ahlin & Brown
+  2009); onset is path-dependent and can be suppressed by passing through quickly (Brown
+  et al. 2002, no number); a shed wake bundle clears in about 7 revolutions (Ananthan).
+  Johnson's lag by R/v_h scaling: 37 ms on RACER_5IN.
+- **Relevance:** dynamic inflow is second order as a thrust lag. The slow state is the
+  vortex ring; a manoeuvre that crosses the band in under 0.1 s meets a fraction of the
+  steady loss. No reduced-order model of the build-up and ejection cycle was found.
+
+### Ground effect at constant rotor speed — **ADOPTED (candidate tier): `ground_effect_fixed_rpm`**
+
+- **Equations (read here):** He & Leang 2020 Eq. (3): K_G = T(z)/T_∞ = 1 + C_a·e^(−C_b·z/R)
+  "while maintaining constant rotor angular velocity"; Eq. (4): C_T = ½σC_lα(θ₀/3 − λ/2);
+  Eq. (15): C_a = 3λ_∞/(2θ₀ − 3λ_∞); Eq. (16): δv_i(z) = v_i∞·e^(−C_b·z/R). Cheeseman &
+  Bennett 1955 Eq. (5): T_∞ = ½ρabcΩ²R³(θ/3 − λ/2); Eq. (6):
+  T_g/T_∞ = 1 + ¼(ρabcΩ²R³/T_∞)·λ/(16(Z/R)²{1 + (V_i/v_i)²}) — the same coefficient, with
+  the image-source decay.
+- **Cheeseman & Bennett confirmed** (read here): Eqs. (1)–(2) and (4) are "at constant
+  power"; δv_i = A·v_i/(16πZ²); Z is the rotor height; the forward-speed factor comes from
+  a directional source with k = 1/3; "for very small values of Z/R large errors are
+  introduced". This closes the open flag on `cheeseman_bennett_forward`.
+- **Parameters (Table 2, read here)** — Ĉ_a, Ĉ_b: P3550 0.38, 1.18; P5030 (three-blade,
+  R = 0.064 m) 0.53, 1.80; P8045 0.27, 2.44; P1045 0.36, 1.89; P1147 0.38, 2.02; C8045
+  0.27, 2.79; C1137 0.49, 2.50; C1344 0.55, 2.87; C1448 0.48, 2.70; C1550 0.61, 2.58;
+  C1654 0.63, 2.68.
+- **Search-read from the same paper:** thrust rose monotonically to the ground on all
+  eleven; quadrotor C_b is up to 30 % lower than the single rotor's while C_a is unchanged;
+  bare rotor pairs at tip gaps of 1.2–2.8 R and heights of 1.1–2.3 R LOSE up to 8 %
+  (fountain re-ingestion); the authors report similar ratios at constant power, speed and
+  throttle for small electric rotors.
+- **Whole vehicles:** F-33 above. The Crazyflie sits in He & Leang's loss region and still
+  gains 8–13 %; it has a body, their rig does not. Unresolved.
+- **Forward flight:** Kan et al. Eq. (11) (read here): T_IGE/T_h = (1 − 3R/(25z))/(1 +
+  (3/50)(V/v_h)³) for V/v_h ≤ 1.2 — the height term is not washed out, where Cheeseman &
+  Bennett's factor removes half of it at V = v_i. No measurement of a thrust loss from a
+  ground vortex on a small multirotor was found.
+- **Moments (search-read):** a tilted ground board under a quadrotor gives a levelling
+  (stabilising) torque proportional to thrust and to tilt up to about 10° (Yang et al.,
+  arXiv 2506.19424); per-rotor evaluation at each hub's height reproduces it. A tilted
+  single rotor gains less: f(θ) = 0.415 − 0.712 sin θ + 0.361 cos θ on the
+  Cheeseman–Bennett increment, 0–40° (Garofano-Soldado et al. 2022).
+- **Unsteadiness (search-read):** the fountain between two rotors is re-ingested and
+  switches sides aperiodically at a height of 2R (Dekker et al. 2022, velocity only);
+  quadrotor CFD shows per-rotor thrust fluctuating ±10–15 % at 0.4 diameters against ±3–4 %
+  at 3 (Tanabe et al. 2021). No measured thrust fluctuation against height exists.
+- **Power (search-read):** rotor torque at constant thrust falls to 0.84 at z/R = 0.5 and
+  0.955 at 1 in CFD (Tanabe). No torque data at constant speed for small fixed-pitch
+  rotors: the candidate leaves torque unchanged.
+- **Ceiling and wall — skipped:** ceiling effect is real but short-range (significant only
+  within one radius; Hsiao & Chirarattananon 2019; Carter 2021); wall effect on thrust is
+  under 5 % and above 2 % only within 0.3 R (Carter). Neither belongs in a spec for open
+  or racing flight; a perching consumer would reopen the ceiling case.
+- **Not obtained:** the Matus-Vargas 2021 review, Conyers 2018, Li 2015, Sharf 2014, Powers
+  2013, Hayden 1976 (two transcriptions of it disagree).
+
+### Rotor-on-rotor interference in forward flight — **ADOPTED (candidate tier): `rotor_wake_interference`**
+
+- **Equations (read here):** Nguyen, Liu, Mori 2018 Eqs. (35)–(40): the downwash a front
+  rotor's horseshoe-vortex wake adds at the rear rotor's centre, over the front rotor's
+  own induced velocity,
+  k = [√(1 + p²/cos²α) + p cos γ − p tan α sin γ] / [√(1 + p²/cos²α)·(1 + p² cos²γ (tan α + tan γ)²)],
+  p = l/R, tan α = h/l, tan γ = λ/μ; rear inflow λ' = (V sin α + (k + 1)v)/(ωR); thrust
+  from the blade-element law.
+- **Validation (read here):** tandem pair and a quadrotor at l/R = 2.83, 6 m/s, α = −5°:
+  rear over front thrust 0.85–0.93 measured across rotor speed (Fig. 18), "0.89 … and 0.86
+  applying the theory"; 11 % deficit at l/R = 2.5; good for l/R of 2.8–3.6; no
+  interference in climb.
+- **Other evidence (search-read):** CFD of two in-line rotors — rear thrust −8.4 % at
+  2.5R spacing, −6.0 % at 3.5R, rear nose-up hub moment −50 % and −36 %; the deficit grows
+  from 20 to 40 kt and saturates (Healy, Misiorowski, Gandhi 2022). CFD of a trimmed
+  quadrotor at 5 and 10 m/s: aft rotors 13–18 % below the isolated expectation (Yoon et
+  al. 2017). On a 3DR SOLO at 40 ft/s and 0 to −5° pitch, 0.3–0.5 N·m of nose-up moment
+  remains after four isolated rotors and the airframe are subtracted, and nothing above
+  the 1 in-lb bias remains at −20 to −40° (derived by the search from NASA/TM-2018-219758
+  tables). Plus layouts see an upwash benefit on the side rotors.
+- **Size on RACER_5IN** (check 6): rear rotors −10 % at 6 m/s, −12 % at 10 m/s near level,
+  −0.2 % at 35 m/s and 60° of tilt. `defer`: material only in slow, near-level flight.
+- **Hover interference — negligible:** 2 % or less at the racer's tip gap (Yoon et al.
+  2016, Shukla & Komerath 2018 — search-read); not carried.
+- **Installation loss — recorded, not a term:** full vehicle over four isolated rotors is
+  0.85–0.95 in hover (Russell et al.: 5 % to 15 % download by airframe; Yoon 2017: 0.949).
+  agilib's 0.9575 sits at the favourable end; a c_T identified in flight already holds it.
+- **No reduced model of the rear hub-moment change**, and none validated on moments.
+- **Dataset for a future verification:** NASA/TM-2018-219758 Appendix C — whole-vehicle,
+  bare-airframe and isolated-rotor forces and moments for five multicopters, as PDF tables.
+  Gill & D'Andrea's supplementary data (19 propellers in oblique flow) were not downloaded.
+- **Not obtained:** Misiorowski, Gandhi, Oberai 2019; Theys 2017; Zhou et al. 2017.
+
+### What would move these terms to verified, and into a backend
+
+- **`inflow_thrust_law`, `vrs_johnson_inflow`:** a measured thrust curve at constant rotor
+  speed as a fixed dataset — the authors' data behind Veismann Fig. 6 or Shetty & Selig
+  Fig. 4, or C_T(J) tables that reach negative J — and the term must beat the backend's
+  k_z model on it. Figure read-offs size the effect; they do not verify it.
+- **`ground_effect_fixed_rpm`:** a thrust stand with a ground board at closed-loop speed,
+  or a hover log with rotor-speed telemetry and a height sensor (Kan's method).
+- **`propwash_thrust_unsteadiness`:** blackbox logs with rotor-speed telemetry through
+  descents, or a load cell above 500 Hz under a rotor in a vertical tunnel; then the
+  rotor-to-rotor correlation.
+- **Backend shape, when they are verified:** one inflow state per rotor (the verified
+  `dynamic_inflow_lag` form) relaxing to Johnson's quasi-steady value with the VRS lag,
+  the ground and interference terms added in the inflow, thrust from the linear law. That
+  replaces the k_z thrust channel; it must not be added on top of it.
+
+
 ## Findings from use (finding-driven intake, INTAKE.md) — 2026-10-04
 
 Found while building SkyFlow's 5-inch racer airframe (Synetic-Labs/SkyFlow 296023e,

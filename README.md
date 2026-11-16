@@ -28,7 +28,7 @@ expressions, and every backend runs the same golden + property suite.
 | `golden/generate/` | The generator scripts that produced them (rerunnable against the pinned sources). |
 | `golden/checkdata/` | Published check data from pinned documents (archaic-source exception): author-run reference statistics where the reference code is no longer executable — currently NASA CR-1998-206937 (Dryden) — and frozen identification results from public measured data (`neurobem_racer.json`). |
 | `docs/equations.md` | Generated equation catalog with the open-work Backlog (`uv run python tools/render_docs.py`). |
-| `tools/` | Doc rendering, and the scripts that reproduce findings from use, source-triage numbers, and reference-vehicle identification (`bem_rate_damping.py`, `identify_neurobem.py`, `sim_source_triage.py`). |
+| `tools/` | Doc rendering, and the scripts that reproduce findings from use, source-triage numbers, and reference-vehicle identification (`bem_rate_damping.py`, `identify_neurobem.py`, `sim_source_triage.py`, `wake_triage.py`). |
 | `REFERENCES.md` | Per-source evaluation ledger — every source ever assessed, including **rejected** models and why. |
 | `INTAKE.md` | The protocol for adding, deferring, and tracking dynamics (new sources and findings from use). |
 | `skyflow_dynamics/backends/` | Generated adapters — `skyflow_dynamics/backends/jax.py` (live): the spec emitted to JAX via `sympy.lambdify`, validated by the same golden + property suites (`properties/test_backend_jax.py`). |
