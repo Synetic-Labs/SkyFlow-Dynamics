@@ -74,10 +74,10 @@ Separate spin-up/spin-down linear+quadratic rates.
 
 - **Defined in:** `spec.motor.asymmetric_lag`
 - **Parameters:** `ka1`, `ka2`, `kd1`, `kd2`
-- **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)
-- **Tests:** `properties/test_motor.py`, `properties/test_golden.py`
+- **Sources:** Crazyflow first-principles dynamics (crazyflow/dynamics/first_principles/dynamics.py) + identified params.toml; ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults); rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Golden vectors from the EXECUTED header-only library at ad2e56e (golden/generate/gen_l2f.py)
+- **Tests:** `properties/test_motor.py`, `properties/test_golden.py`, `properties/test_golden_l2f.py`
 - **Evidence:** executed · **Use:** `backend`
-- **Notes:** Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces to first-order at (1/τ, 0, 1/τ, 0). RotorS/PX4's FirstOrderFilter is the pure-exponential special case (ka2 = kd2 = 0).
+- **Notes:** Crazyflow coefficients are RPM-based; because Ω̇ rescales with Ω, ka1/kd1 carry over unchanged and ka2/kd2 convert by ×60/2π — i.e. (60/2π)^(Ω-power − 1). Reduces to first-order at (1/τ, 0, 1/τ, 0). RotorS/PX4's FirstOrderFilter is the pure-exponential special case (ka2 = kd2 = 0), as is L2F's rising/falling time-constant pair (executed 2026-11-15: its RK4-integrated rotor state reproduced through spec RK4 at 1e-12).
 
 ### `throttle_curve` — **verified**
 
@@ -456,16 +456,16 @@ Rotor body-rate damping that stiffens with rate: D(p) from the rotor inflow resp
 
 ### `propwash_thrust_unsteadiness` — *proposed*
 
-Unsteady per-rotor thrust when a rotor descends into its own wake (propwash): a fluctuating loss on top of the mean vortex-ring inflow.
+Unsteady per-rotor thrust when a rotor descends into its own wake (propwash): a low-frequency fluctuation on top of the mean vortex-ring thrust loss.
 
 - **Defined in:** — (proposed: no spec expression yet)
-- **Sources:** SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed
+- **Sources:** Veismann, Dougherty, Gharib — Effects of rotor separation on the axial descent performance of dual-rotor configurations, Flow 3, E7, 2023, doi 10.1017/flo.2022.31 (open access; §4 and figs. 6-7 read from the PDF): mean and standard deviation of thrust for 4, 5 and 6 in fixed-pitch rotor pairs in simulated axial descent, Re 3.0e4-8.1e4, 2 kHz load cell, 50 Hz low-pass; SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed
 - **Tests:** `properties/test_findings.py`
 - **Evidence:** none yet · **Use:** `spec`
 - **Decision:** defer
-- **Revisit when:** a consumer task spends sustained time descending through its own wake (dives, split-S, hard braking; over ~1 % of steps) and shows attitude oscillation the mean model does not reproduce, or a measured thrust-fluctuation dataset for small rotors in descent is found
-- **Effect:** SimITL's 5-inch tuning at the racer's axial points (tools/sim_source_triage.py): per-rotor thrust loss up to 21 % at 0.5 v_h descent and 84 % at 2 v_h, independent across rotors — a hand-tuned upper bound, not a measurement
-- **Notes:** SimITL: T_i ← T_i·(1 − min(V/V_max, 1)·n_i·c²·k_pw), c = max(0, (cos∠(v_a, −ê_i) − c₀)/(1 − c₀)), n_i ∈ [0, 1] a 45 Hz low-passed simplex noise drawn per rotor (physics.cpp:516-552; wind-relative after libfpv patch 0017). A game stand-in: libfpv's own notes list vortex ring state as still open. The verified vrs_empirical_inflow gives the mean induced velocity in the same band and no fluctuation; the exogenous τ_ext input is where consumers put such disturbances today. No expression until a measured source gives the fluctuation amplitude and spectrum against the descent ratio v_ver/v_h. It would multiply the thrust of the mean-inflow model: route descent through ONE path, never both.
+- **Revisit when:** a consumer task spends sustained time descending through its own wake (dives, split-S, hard braking; over ~1 % of steps) and shows attitude oscillation the mean model does not reproduce, or a source gives the fluctuation spectrum and the rotor-to-rotor correlation
+- **Effect:** measured peak σ(T)/T̄ 0.14–0.20 at 1.2–1.3 v_h (9.2–10 m/s descent on RACER_5IN); read off the near-linear rise, about 0.08 at 0.5 v_h. If the four rotors fluctuate independently that is a roll disturbance of about 15–19 rad/s² rms at the peak (tools/sim_source_triage.py) — 2–3 % of roll authority, on top of a 24–33 % mean thrust loss. SimITL's tuning gives up to 21 % / 84 % loss at 0.5 / 2 v_h
+- **Notes:** Measured (Veismann 2023, fixed-pitch 4–6 in rotors at constant rpm, load cell): the coefficient of variation σ(T)/T̄ rises near-linearly from < 0.02 at hover to 0.14–0.20 at descent ratio |v_c|/v_h = 1.2–1.3, where the mean thrust is also lowest (0.67–0.76 T_h); 42 % higher for rotors tip to tip. The content is low frequency: moving the low-pass cutoff across 10–100 Hz did not change it. A model would be T = T̄(x)·(1 + σ(x)·n(t)), x = |v_c|/v_h — but the decay of σ past the peak, the spectrum of n, the dependence on descent angle and the correlation between rotors are not given in closed form (REFERENCES.md lists what the other sources report), and all bench data hold rpm constant. So no expression yet. SimITL's stand-in (T_i·(1 − min(V/V_max, 1)·n_i·c²·k_pw), 45 Hz noise, physics.cpp:516-552) has the wrong shape: it grows without limit in descent speed where the measurement peaks at 1.2–1.3 v_h and recovers. The verified vrs_empirical_inflow gives the mean in the same band; the fluctuation would multiply the thrust of that mean model — ONE descent path, never both. Until then consumers put it in the exogenous τ_ext input.
 
 
 ## Frame aerodynamics
@@ -561,6 +561,32 @@ Turbulent-jet wake velocity field + frame drag + per-rotor thrust loss.
 - **Decision:** open
 - **Notes:** Thrust-scaled, gives force AND moment; ZEF only (z > 3L). Route wake velocity through ONE rotor-inflow path to avoid double-counting with AoA thrust terms.
 
+### `rotor_gust_gradient` — *proposed*
+
+Per-rotor wind: each rotor's local airspeed uses the air velocity at its own hub, so a gust that differs across the airframe makes a torque.
+
+- **Defined in:** — (proposed: no spec expression yet)
+- **Sources:** MIL-F-8785C / MIL-HDBK-1797 — Flying Qualities of Piloted Aircraft: Dryden and von Karman continuous turbulence, low-altitude closures, discrete gust; SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed
+- **Tests:** `properties/test_findings.py`
+- **Evidence:** none yet · **Use:** `spec`
+- **Decision:** defer
+- **Revisit when:** a consumer flies within a few metres of the ground in wind above the MIL 'moderate' level (W20 ≥ 15 m/s), flies a vehicle several times the racer's size, or adds a spatially correlated turbulence driver
+- **Effect:** von Kármán transverse correlation at the MIL low-altitude scales, through the k_z thrust channel (tools/sim_source_triage.py): rms roll disturbance on RACER_5IN 0.6 / 0.9 / 1.8 / 2.7 rad/s² at 10 m and 1.0 / 1.5 / 3.1 / 4.6 rad/s² at 2 m for W20 = 5 m/s / light / moderate / severe; CRAZYFLIE 0.8–6.0 rad/s². Under 1 % of roll authority (≈ 620 rad/s²) throughout
+- **Notes:** The spec takes ONE wind vector for the vehicle (v_a = Rᵀ·(v − v_wind)); gusts therefore make forces but no torques. The multirotor form of MIL-F-8785C's angular gusts p_g, q_g, r_g (skipped as wingspan-based, REFERENCES.md) is a per-rotor wind input v_wind,i feeding local_airspeed — no new coefficient, the existing k_d / k_z / flapping terms do the rest. libfpv implements it (patch 0017). The spec change is small; the cost is harness-side: a gust generator correlated across the hub positions (the Dryden forming filters are one-point). Equivalent shortcut: subtract a gust rotation ω_g from ω in the ω×r_i term.
+
+### `rotor_imbalance_vibration` — *candidate*
+
+Rotor mass imbalance: a hub force U_i·Ω_i² turning with each rotor — the rotation-frequency lines in the accelerometer and gyro.
+
+- **Defined in:** `spec.wrench.rotor_imbalance_wrench`
+- **Sources:** Ghalamchi, Jia, Mueller — Real-Time Vibration-Based Propeller Fault Diagnosis for Multicopters, IEEE/ASME Trans. Mechatronics 25(1):395-405, 2020, doi 10.1109/TMECH.2019.2947250. Equations (1)-(10), Table I and Fig. 3 read from the author-hosted version (UC Berkeley HiPeRLab); the journal reference is from the publisher listing, not printed on that version; SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed
+- **Tests:** `properties/test_candidates.py`, `properties/test_findings.py`
+- **Evidence:** none yet · **Use:** `spec`
+- **Decision:** defer
+- **Revisit when:** a consumer policy or estimator reads the raw gyro or accelerometer instead of the flight controller's notch-filtered output, the RPM filter enters the firmware loop, or a sim-to-real gap is traced to rotor-harmonic noise
+- **Effect:** RACER_5IN, 10 mg at one blade tip (U = 6.5e-7 kg·m; the paper's damaged props carry 5 mg at 32 mm and 40 mg at 100 mm): accelerometer line 1.0 m/s² at hover and 4.5 m/s² at full thrust (10 % and 46 % of g), yaw gyro line 0.021 rad/s at hover, at 174 Hz — above the 5 % threshold on the accelerometer; zero mean, so no effect on the mean flight path
+- **Notes:** F_i = U_i·Ω_i²·(cos θ_i, sin θ_i, 0) = (U_i/c_T)·T_i in the rotor plane (Ghalamchi eq. 4, read from the paper); accelerometer line U·Ω²/m (their eq. 5, measured in flight on 39 g, 690 g and 1170 g vehicles). The r_i × F_i moment is rigid-body mechanics added here — the paper models no moment and no gyro: a yaw line of rate amplitude |r|·U·Ω/J_zz, roll and pitch only through hub height. U = m_u·r_u comes from a prop balancer or from the hover accelerometer line. Not covered: frame flexibility and soft mounts (their estimate of one damaged prop doubled between two airframes), the 2× and 3× lines flight controllers also notch, blade-pass aerodynamic loads. SimITL instead adds gyro-side sinusoids with a hand-tuned Ω² law (physics.cpp:388-498; 0.18 rad/s per motor at full throttle, 36× its white noise) — against a rigid-body Ω law here. Needs the rotor phase θ_i as harness state and a step well below 1/Ω; SkyFlow's ROADMAP.md holds the matching firmware-side design (RPM filter in the loop).
+
 
 ## Sensors
 
@@ -574,29 +600,15 @@ Specific force + body rate at offset/rotated mount, lever-arm terms in body fram
 - **Evidence:** analytic · **Use:** `backend`
 - **Notes:** Derived from rigid-body kinematics: a_S = a_B + α×r + ω×(ω×r) with all lever-arm quantities in the body frame, rotated once; proven against an independent closed-form model in test_sensors.py. Upstream rotorpy's IMU mixes frames (findings F-1/F-2, see REFERENCES.md) and is not usable as a reference.
 
-### `imu_stochastic_errors` — *candidate*
+### `imu_stochastic_errors` — **verified**
 
 Per-axis IMU corruption: exact-discretized Gauss–Markov bias + white noise + turn-on bias.
 
 - **Defined in:** `spec.sensors.imu_bias_gauss_markov_step, spec.sensors.imu_corrupt`
-- **Sources:** ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults); rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Evaluated by reading, not executed
-- **Tests:** `properties/test_candidates.py`
-- **Evidence:** none yet · **Use:** `spec`
-- **Decision:** open
-- **Notes:** b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. Exact OU discretization (Maybeck Vol. 1 Eq. 4-114, as cited in gazebo_imu_plugin.cpp; book not directly consulted — exactness proven symbolically instead). Unit-normal draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero rather than the stationary σ_b²τ/2 (their own TODO). Executed reference available (2026-11-15, not yet run): l2f's bias_process_step (operations_generic/70_post_integration.h at rl-tools ad2e56e) has the same transition and driving std, with the τ → ∞ random walk as an explicit branch; a golden generator compiling that header would verify this term. l2f's white noise is a per-sample std (σ_nd/√dt here) and its turn-on bias a uniform draw.
-
-### `imu_rotor_vibration` — *proposed*
-
-Rotor-synchronous vibration in the gyro and accelerometer: lines at 1×, 2×, 3× each rotor's frequency plus frame resonances, growing with rotor speed.
-
-- **Defined in:** — (proposed: no spec expression yet)
-- **Sources:** SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed
-- **Tests:** `properties/test_findings.py`
-- **Evidence:** none yet · **Use:** `spec`
-- **Decision:** defer
-- **Revisit when:** a consumer policy or estimator reads the raw gyro or accelerometer instead of the flight controller's notch-filtered output, or a sim-to-real gap is traced to rotor-harmonic noise
-- **Effect:** SimITL's 5-inch tuning (tools/sim_source_triage.py): 0.18 rad/s per motor at full throttle and 0.017 rad/s at hover on the roll axis — 36× and 3.3× its white gyro noise half-range of 0.005 rad/s; the lines sit near 170–550 Hz
-- **Notes:** SimITL adds to the gyro, per motor and axis, A·(0.05 + damage)·(Ω/Ω_no-load)²·[sin φ + h₁·sin 2φ + h₂·sin 3φ] with φ̇ = Ω, plus two frame-resonance sinusoids gated on rotor speed, then a 500 Hz low-pass (physics.cpp:87-108, 388-498). Tuned to look like flight logs, not measured, and the Ω² amplitude law is not derived: a rigid frame with rotor imbalance m_u·e sees an in-plane hub force m_u·e·Ω², so a rate amplitude ∝ Ω, reaching roll and pitch only through hub height or frame flexibility. No expression until a measured source (flight-log spectra with rotor-speed telemetry) fixes the law. Two routes: an additive sensor term beside imu_stochastic_errors, or a rotating hub force in the EOM (needs dt ≪ 1/Ω).
+- **Sources:** ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults); rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Golden vectors from the EXECUTED header-only library at ad2e56e (golden/generate/gen_l2f.py)
+- **Tests:** `properties/test_candidates.py`, `properties/test_golden_l2f.py`, `properties/test_backend_jax.py`
+- **Evidence:** executed · **Use:** `backend`
+- **Notes:** b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1−e^(−2dt/τ)))·w; y = y_true + b + b_on + (σ_nd/√dt)·n. Exact OU discretization (Maybeck Vol. 1 Eq. 4-114, as cited in gazebo_imu_plugin.cpp; book not directly consulted — exactness proven symbolically instead). Unit-normal draws and the power-up b_on draw are harness-side, mirroring the Dryden noise split. RotorS ships 2× the ADIS16448 datasheet values as defaults and initializes b at zero rather than the stationary σ_b²τ/2 (their own TODO). Verified 2026-11-15 against the EXECUTED rl-tools L2F (golden/vectors/l2f_imu.json): bias_process_step reproduced at 1e-12 for τ = 0.05 / 2 / 300 s, the τ ≤ 0 random-walk branch (this step's τ → ∞ limit, proven symbolically) and the held bias; gyro and accelerometer rows of full rl_tools::step calls reproduced as imu_corrupt over the strapdown truth with σ_nd = std·√dt and b_on = the reference's constant offset. Driving noise is the reference's own, replayed on a copy of its generator — not recovered from the outputs. Size: with the RotorS ADIS16448 numbers the gyro bias moves 1.2e-4 rad/s over a 10 s episode, about 1 % of the per-sample white noise at 1 kHz — minor, cheap and identifiable (Allan variance), so it is carried; it grows with episode length and with low-grade MEMS thermal drift. The backend emits 1 − e^(−2dt/τ) as −expm1(−2dt/τ): the literal form loses the driving noise in float32 once τ ≫ dt (test_backend_jax.py).
 
 
 ## Discretization
@@ -607,10 +619,10 @@ Closed-form Ω(dt) = Ω_c + (Ω₀−Ω_c)e^(−dt/τ); operator-split from the 
 
 - **Defined in:** `spec.motor.exact_exp_step`
 - **Parameters:** `tau_m`
-- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28); ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults)
-- **Tests:** `properties/test_motor.py`, `properties/test_golden_flightning.py`
+- **Sources:** Heeg, Song, Scaramuzza — Learning Quadrotor Control From Visual Features Using Differentiable Simulation, ICRA 2025; reference implementation executed at commit a5d5619 (gen_flightning.py, era jax 0.4.30 per finding F-28); ethz-asl/rotors_simulator gazebo_motor_model.cpp + PX4/PX4-SITL_gazebo-classic variant (signed rolling moment); common.h FirstOrderFilter (exact-exp motor lag, asymmetric up/down time constants); gazebo_imu_plugin.cpp (Gauss–Markov IMU error model, ADIS16448 defaults); rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Golden vectors from the EXECUTED header-only library at ad2e56e (golden/generate/gen_l2f.py)
+- **Tests:** `properties/test_motor.py`, `properties/test_golden_flightning.py`, `properties/test_golden_l2f.py`
 - **Evidence:** executed, analytic · **Use:** `backend`
-- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only. Exactness proven symbolically against the lag ODE (test_motor.py); verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py ((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail); also RotorS' FirstOrderFilter.
+- **Notes:** Unconditionally stable; per-step gradient factor e^(−dt/τ) ∈ (0,1). Linear lag only. Exactness proven symbolically against the lag ODE (test_motor.py); verified 2026-08-19 against the EXECUTED flightning quadrotor_obj.py ((Ω−Ω_c)e^(−dt/τ)+Ω_c, post-step clip to [Ω_min, Ω_max] as harness detail); also RotorS' FirstOrderFilter. Executed 2026-11-15 as L2F's CLOSED_FORM rotor step with the time constant picked by direction (rising / falling) — exact under a held command, since the approach never crosses its setpoint; the reference feeds that path the raw action instead of the mapped command (finding F-31).
 
 ### `rk4_fixed_step` — **verified**
 
@@ -747,7 +759,7 @@ Normal-force cancellation + velocity clamps at z ≤ 0 — bookkeeping, not cont
 Every term short of verified-and-in-backend, by decision (INTAKE.md: *pursue* = do now, *defer* = wait for the revisit condition, *hold* = no next step planned, *open* = not triaged yet).
 
 
-### defer (9)
+### defer (10)
 
 | term | tier | use | revisit when |
 |---|---|---|---|
@@ -758,10 +770,11 @@ Every term short of verified-and-in-backend, by decision (INTAKE.md: *pursue* = 
 | `bem_tpp_wrench` | verified | spec | a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training or flight steps), or sustained axial descent through the vortex-ring band (0.5–2 v_h) |
 | `rotor_rate_damping_nonlinear` | proposed | spec | a consumer task needs body-rate damping above ~50 rad/s (over ~1 % of training or flight steps), or a flip / freestyle task |
 | `angular_body_drag` | proposed | spec | a fit of the backend model to measured flight data leaves a rate-proportional residual torque after the rotor terms |
-| `propwash_thrust_unsteadiness` | proposed | spec | a consumer task spends sustained time descending through its own wake (dives, split-S, hard braking; over ~1 % of steps) and shows attitude oscillation the mean model does not reproduce, or a measured thrust-fluctuation dataset for small rotors in descent is found |
-| `imu_rotor_vibration` | proposed | spec | a consumer policy or estimator reads the raw gyro or accelerometer instead of the flight controller's notch-filtered output, or a sim-to-real gap is traced to rotor-harmonic noise |
+| `propwash_thrust_unsteadiness` | proposed | spec | a consumer task spends sustained time descending through its own wake (dives, split-S, hard braking; over ~1 % of steps) and shows attitude oscillation the mean model does not reproduce, or a source gives the fluctuation spectrum and the rotor-to-rotor correlation |
+| `rotor_gust_gradient` | proposed | spec | a consumer flies within a few metres of the ground in wind above the MIL 'moderate' level (W20 ≥ 15 m/s), flies a vehicle several times the racer's size, or adds a spatially correlated turbulence driver |
+| `rotor_imbalance_vibration` | candidate | spec | a consumer policy or estimator reads the raw gyro or accelerometer instead of the flight controller's notch-filtered output, the RPM filter enters the firmware loop, or a sim-to-real gap is traced to rotor-harmonic noise |
 
-### open (30)
+### open (29)
 
 | term | tier | use | revisit when |
 |---|---|---|---|
@@ -794,7 +807,6 @@ Every term short of verified-and-in-backend, by decision (INTAKE.md: *pursue* = 
 | `wind_shear_log` | candidate | spec | — |
 | `semi_implicit_euler` | verified | spec | — |
 | `quaternion_norm_correction` | candidate | spec | — |
-| `imu_stochastic_errors` | candidate | spec | — |
 
 ## Sources
 
@@ -834,7 +846,9 @@ Every term short of verified-and-in-backend, by decision (INTAKE.md: *pursue* = 
 - **mujoco_fluid**: MuJoCo documentation, Computation > Fluid forces, inertia-based model (equivalent box from the body inertia; quadratic and Stokes force and torque); active in google-deepmind/mujoco_menagerie skydio_x2/x2.xml and bitcraze_crazyflie_2/cf2.xml via <option density viscosity> — <https://mujoco.readthedocs.io/en/stable/computation/fluid.html>
 - **cr206937**: Yeager — Implementation and Testing of Turbulence Models for the F18-HARV Simulation, NASA CR-1998-206937, 1998. Pinned-document golden source (sha256 4f63d46d…, NTRS 19980028448): GUSTMDL ACSL listing + Tables 2-7 run statistics — <https://ntrs.nasa.gov/citations/19980028448>
 - **simitl**: SimITL (AJ92/SimITL) src/sim/physics.cpp at commit c881d55, as vendored and patched by hammerill/libfpv at 08d140a (patches/simitl/0011-0017) — a Betaflight-in-the-loop FPV game flight model. Constants are hand-tuned by feel; no measured data. Evaluated by reading, not executed — <https://github.com/hammerill/libfpv>
-- **l2f**: rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Evaluated by reading, not executed — <https://github.com/rl-tools/rl-tools>
+- **veismann2023**: Veismann, Dougherty, Gharib — Effects of rotor separation on the axial descent performance of dual-rotor configurations, Flow 3, E7, 2023, doi 10.1017/flo.2022.31 (open access; §4 and figs. 6-7 read from the PDF): mean and standard deviation of thrust for 4, 5 and 6 in fixed-pitch rotor pairs in simulated axial descent, Re 3.0e4-8.1e4, 2 kHz load cell, 50 Hz low-pass — <https://doi.org/10.1017/flo.2022.31>
+- **ghalamchi2020**: Ghalamchi, Jia, Mueller — Real-Time Vibration-Based Propeller Fault Diagnosis for Multicopters, IEEE/ASME Trans. Mechatronics 25(1):395-405, 2020, doi 10.1109/TMECH.2019.2947250. Equations (1)-(10), Table I and Fig. 3 read from the author-hosted version (UC Berkeley HiPeRLab); the journal reference is from the publisher listing, not printed on that version — <https://hiperlab.berkeley.edu/wp-content/uploads/2019/10/2019-Real-time-vibration-based-propeller-fault-diagnosis-for-multicopters.pdf>
+- **l2f**: rl-tools L2F multirotor environment (include/rl_tools/rl/environments/l2f) as pinned by rl-tools/hyperdrone 01eee73 (rl-tools ad2e56e, 2026-10-30; Eschmann & Loianno — HyperDrone, arXiv:2610.28950) and rl-tools/raptor 2c789df (rl-tools e43ae4b, 2025-04-22; RAPTOR foundation policy, Science Robotics, doi 10.1126/scirobotics.aec1481). Golden vectors from the EXECUTED header-only library at ad2e56e (golden/generate/gen_l2f.py) — <https://github.com/rl-tools/rl-tools>
 
 ## Reviewed and excluded
 

@@ -1,7 +1,7 @@
 """
 Triage numbers for the 2026-11-15 intake of libfpv / SimITL and rl-tools l2f (REFERENCES.md,
 "libfpv + SimITL" and "rl-tools l2f") — the sizes quoted there and in the registry entries
-imu_rotor_vibration, propwash_thrust_unsteadiness and rotor_drag_hforce.
+rotor_imbalance_vibration, propwash_thrust_unsteadiness and rotor_drag_hforce.
 
     uv run python tools/sim_source_triage.py
 
@@ -14,7 +14,8 @@ Five checks, each against data already in this repo:
   3. gust gradient across the airframe (libfpv samples the wind at each hub, patch 0017):
      rms roll disturbance when the left and right rotor pairs see different vertical gusts,
      from the von Kármán transverse correlation at the MIL-F-8785C low-altitude scales.
-  4. SimITL's propwash thrust loss, at the INTAKE axial operating points.
+  4. SimITL's propwash thrust loss at the INTAKE axial operating points, beside the
+     measured thrust fluctuation of small rotors in descent (Veismann et al. 2023).
   5. SimITL's rotor-synchronous gyro vibration against its own white gyro noise, and its
      angular damping against BEM (F-29).
 
@@ -130,6 +131,31 @@ def simitl_propwash_loss(airspeed: float, cos_into_wake: float = 1.0,
     return min(1.0, speed_factor * reverse * p["propwash_factor"])
 
 
+#: Veismann, Dougherty, Gharib (2023) §4, fig. 7: σ(T)/T̄ < 0.02 at hover, rising
+#: near-linearly to 0.14–0.20 at descent ratio 1.2–1.3; mean thrust 0.67–0.76 T_h there.
+PROPWASH_MEASURED = {"sigma_hover": 0.02, "sigma_peak": (0.14, 0.20), "x_peak": 1.25,
+                     "mean_thrust_min": (0.67, 0.76)}
+
+
+def measured_propwash_sigma(x: float, sigma_peak: float) -> float:
+    """σ(T)/T̄ on the measured near-linear rise, descent ratio x = |v_c|/v_h ≤ x_peak."""
+    m = PROPWASH_MEASURED
+    return m["sigma_hover"] + (sigma_peak - m["sigma_hover"]) * min(x, m["x_peak"]) / m["x_peak"]
+
+
+def measured_propwash_roll(v: dict, sigma_peak: float, mean_ratio: float) -> dict:
+    """Roll disturbance at the measured fluctuation peak IF the rotors fluctuate
+    independently (the sources do not give the correlation): each rotor's thrust has
+    std σ·T̄ about the reduced mean T̄ = mean_ratio·T_hover (rpm held at hover)."""
+    a_y = abs(v["rotor_pos"][0][1])
+    n = len(v["ct2"])
+    thrust = mean_ratio * v["mass"] * v["grav"] / n
+    torque = a_y * math.sqrt(n) * sigma_peak * thrust
+    authority = 2 * a_y * v["ct2"][0] * v["limits"]["rotor_speed_max"] ** 2
+    return {"roll_accel_rms": torque / v["inertia"][0][0],
+            "fraction_of_authority": torque / authority}
+
+
 def simitl_vibration(p: dict = SIMITL_5IN) -> dict:
     """Per-motor amplitude of SimITL's rotor-frequency gyro term (roll axis, undamaged
     prop) at full throttle and at hover, against its white-noise half-range."""
@@ -169,6 +195,13 @@ def main():
     print(f"4. SimITL propwash thrust loss per rotor, upper bound, racer v_h = {v_h:.2f} m/s:")
     print(f"   descent 0.5 v_h: {simitl_propwash_loss(0.5 * v_h):.2f}   "
           f"2 v_h: {simitl_propwash_loss(2 * v_h):.2f}")
+
+    lo = measured_propwash_roll(RACER_5IN, 0.14, 0.76)
+    hi = measured_propwash_roll(RACER_5IN, 0.20, 0.67)
+    print(f"   measured (Veismann 2023): σ(T)/T̄ {measured_propwash_sigma(0.5, 0.17):.2f} at "
+          f"0.5 v_h, 0.14–0.20 at 1.25 v_h = {1.25 * v_h:.1f} m/s; independent rotors → "
+          f"roll {lo['roll_accel_rms']:.0f}–{hi['roll_accel_rms']:.0f} rad/s² rms "
+          f"({lo['fraction_of_authority']:.3f}–{hi['fraction_of_authority']:.3f} of authority)")
 
     vib = simitl_vibration()
     print(f"5. SimITL gyro vibration per motor: {vib['full']:.3f} rad/s at full throttle, "

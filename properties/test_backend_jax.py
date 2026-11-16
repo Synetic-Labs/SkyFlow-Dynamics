@@ -6,6 +6,10 @@ may only reassociate floating point, never change the math.
 x64 is enabled here because the golden tolerances (1e-9) are below float32 resolution; the
 backend itself follows the ambient JAX config."""
 
+import json
+import math
+import pathlib
+
 import numpy as np
 import pytest
 
@@ -201,3 +205,50 @@ def test_jacobian_is_finite():
     J = jax.jacfwd(f)(jnp.asarray(random_state(rng)), jnp.asarray(RICH_INPUTS),
                       jnp.asarray(p))
     assert np.isfinite(np.asarray(J)).all()
+
+
+# ---- IMU bias step (spec.sensors.imu_bias_gauss_markov_step; l2f executed vectors) ----
+
+L2F_DOC = json.loads((pathlib.Path(__file__).resolve().parent.parent / "golden" / "vectors"
+                      / "l2f_imu.json").read_text())
+
+
+def test_imu_bias_step_replays_l2f_vectors():
+    """The generated bias step against the EXECUTED l2f bias process: OU cases directly,
+    the reference's random-walk branch (tau <= 0) through a very large tau."""
+    step = backend.imu_bias_step_fn()
+    seen = set()
+    for case in L2F_DOC["bias_process"]:
+        if case["sigma"] == 0:
+            continue                      # held bias: the process is not run
+        tau = case["tau"] if case["tau"] > 0 else 1e15
+        seen.add(case["tau"] > 0)
+        for s in case["steps"]:
+            got = np.asarray(step(jnp.asarray(s["b"]), jnp.asarray(s["w"]), tau,
+                                  case["sigma"], case["dt"]))
+            _check(got, np.asarray(s["b_next"]), "imu bias step", 1e-12)
+    assert seen == {True, False}
+
+
+def test_imu_bias_step_is_float32_stable():
+    """float32 (the rollout precision) keeps the driving noise from the white-noise limit
+    (tau << dt) to the random-walk limit (tau >> dt); the spec's literal 1 − exp form does
+    not, which is why the backend emits expm1."""
+    step = backend.imu_bias_step_fn()
+    b, w, sigma, dt = 0.01, 1.3, 0.5, 1e-3
+    for tau in (1e-5, 0.05, 300.0, 1e3, 1e9):
+        exact = b * math.exp(-dt / tau) + sigma * math.sqrt(
+            tau / 2 * -math.expm1(-2 * dt / tau)) * w
+        got = float(step(jnp.float32(b), jnp.float32(w), jnp.float32(tau),
+                         jnp.float32(sigma), jnp.float32(dt)))
+        assert got == pytest.approx(exact, rel=2e-6), tau
+    literal = np.float32(1) - np.exp(np.float32(-2 * dt / 1e9))
+    assert literal == 0.0                 # what the un-rewritten form would feed the sqrt
+
+
+def test_imu_bias_step_broadcasts_over_fleet():
+    step = backend.imu_bias_step_fn()
+    out = step(jnp.zeros((5, 3)), jnp.ones((5, 3)), 300.0, 0.5, 1e-3)
+    assert out.shape == (5, 3)
+    np.testing.assert_allclose(np.asarray(out), 0.5 * math.sqrt(
+        150.0 * -math.expm1(-2e-3 / 300.0)), rtol=1e-12)

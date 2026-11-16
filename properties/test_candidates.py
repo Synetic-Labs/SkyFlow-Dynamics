@@ -13,8 +13,11 @@ from skyflow_dynamics.spec import (
     rotor_aero,
     sensors,
     wind,
+    wrench,
 )
 from skyflow_dynamics.spec.frames import EZ
+from skyflow_dynamics.spec.parameters import RACER_5IN, substitution
+from skyflow_dynamics.spec.symbols import param_symbols
 
 z, R, d, b, V, v_i = sp.symbols("z R d b V v_i", positive=True)
 
@@ -391,3 +394,79 @@ def test_imu_corruption_integrating_sampler_scaling():
     assert sp.simplify(noise_gain**2 - sigma_nd**2 / dt) == 0
     assert sp.simplify(noise_gain.subs(dt, dt / 2)**2 - 2 * sigma_nd**2 / dt) == 0
     assert sp.simplify(meas.subs({bias: 0, b_on: 0, n: 0}) - y) == 0
+
+# ---------------- rotor imbalance (Ghalamchi, Jia, Mueller 2020, eqs. 4-5) ----------------
+
+def _imbalance():
+    P = param_symbols(4)
+    W = sp.Matrix(sp.symbols("W1:5", positive=True))
+    th = sp.Matrix(sp.symbols("th1:5", real=True))
+    U = sp.Matrix(sp.symbols("U1:5", nonnegative=True))
+    F, M = wrench.rotor_imbalance_wrench(W, th, U, P)
+    return P, W, th, U, F, M
+
+
+def test_rotor_imbalance_force_is_the_published_form():
+    """Single rotor: |F| = U·Ω² at every phase, in the rotor plane, zero mean per turn; and
+    eq. (4)'s second form, (U/c_T)·T, once c_T·Ω² = T."""
+    _p, W, th, U, F, _ = _imbalance()
+    one = F.subs({U[1]: 0, U[2]: 0, U[3]: 0})
+    assert sp.simplify(one.dot(one) - (U[0] * W[0] ** 2) ** 2) == 0
+    assert one[2] == 0
+    assert sp.integrate(one, (th[0], 0, 2 * sp.pi)) == sp.zeros(3, 1)
+    c_T, T = sp.symbols("c_T T", positive=True)
+    assert sp.simplify(one.subs(W[0], sp.sqrt(T / c_T))
+                       - U[0] / c_T * T * sp.Matrix([sp.cos(th[0]), sp.sin(th[0]), 0])) \
+        == sp.zeros(3, 1)
+
+
+def test_rotor_imbalance_vanishes_when_balanced_and_scales_with_thrust():
+    _p, W, _th, U, F, M = _imbalance()
+    zero = dict.fromkeys(U, 0)
+    assert F.subs(zero) == sp.zeros(3, 1) and M.subs(zero) == sp.zeros(3, 1)
+    k = sp.Symbol("k", positive=True)             # Ω → kΩ: force and moment scale as k²
+    scaled = {W[i]: k * W[i] for i in range(4)}
+    assert sp.simplify(F.subs(scaled, simultaneous=True) - k ** 2 * F) == sp.zeros(3, 1)
+    assert sp.simplify(M.subs(scaled, simultaneous=True) - k ** 2 * M) == sp.zeros(3, 1)
+
+
+def test_rotor_imbalance_moment_is_pure_yaw_for_coplanar_hubs():
+    """Hubs in the plane of the centre of mass: no roll or pitch torque; the yaw torque of
+    one rotor peaks at |r|·U·Ω² (force across the arm) and is zero along the arm."""
+    P, W, th, U, _, M = _imbalance()
+    flat = {P.rotor_pos[i][2]: 0 for i in range(4)}
+    Mf = M.subs(flat)
+    assert Mf[0] == 0 and Mf[1] == 0
+    one = Mf[2].subs({U[1]: 0, U[2]: 0, U[3]: 0})
+    rx, ry = P.rotor_pos[0][0], P.rotor_pos[0][1]
+    along = sp.atan2(ry, rx)
+    assert sp.simplify(one.subs(th[0], along)) == 0
+    peak = sp.simplify(one.subs(th[0], along + sp.pi / 2) ** 2
+                       - (rx ** 2 + ry ** 2) * (U[0] * W[0] ** 2) ** 2)
+    assert peak == 0
+
+
+def test_rotor_imbalance_reproduces_published_accelerometer_relation():
+    """Eqs. (6)-(10): a_x = Σ Δ_i·f_i·cos θ_i with Δ_i = m_u·r_u/(m_b·κ_f); and the size on
+    the reference racer for a 10 mg chip at the blade tip (the paper's damage: 5 mg on a
+    32 mm prop, 40 mg on a 100 mm prop)."""
+    P, W, th, U, F, M = _imbalance()
+    m_b, kf = sp.symbols("m_b kappa_f", positive=True)
+    f = [kf * W[i] ** 2 for i in range(4)]
+    published = sum(U[i] / (m_b * kf) * f[i] * sp.cos(th[i]) for i in range(4))
+    assert sp.simplify(F[0] / m_b - published) == 0
+
+    vals = substitution(P, RACER_5IN)
+    U_10mg = 10e-6 * RACER_5IN["r_prop"]
+    W_h = float(np.sqrt(RACER_5IN["mass"] * RACER_5IN["grav"] / 4 / RACER_5IN["ct2"][0]))
+    one = {U[0]: U_10mg, U[1]: 0, U[2]: 0, U[3]: 0, th[0]: 0}
+    a_hover = float(F[0].subs(one).subs(W[0], W_h)) / RACER_5IN["mass"]
+    a_max = float(F[0].subs(one).subs(W[0], RACER_5IN["limits"]["rotor_speed_max"])) \
+        / RACER_5IN["mass"]
+    assert abs(a_hover - 1.00) < 0.01 and abs(a_max - 4.51) < 0.02       # m/s²
+    arm = float(np.hypot(*RACER_5IN["rotor_pos"][0][:2]))
+    yaw_rate = arm * U_10mg * W_h / RACER_5IN["inertia"][2][2]           # |M_z|/(J_zz·Ω)
+    assert abs(yaw_rate - 0.0214) < 0.0005                               # rad/s
+    th_peak = float(sp.atan2(*reversed(RACER_5IN["rotor_pos"][0][:2]))) + np.pi / 2
+    M_z = float(M[2].subs({**one, th[0]: th_peak}).subs(W[0], W_h).subs(vals))
+    assert abs(abs(M_z) - arm * U_10mg * W_h ** 2) < 1e-9

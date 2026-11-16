@@ -10,8 +10,8 @@ RACER_5IN / F-30 — the reference vehicle's values match the frozen identificat
 reproduces without the flight data; the flight data's moments do not close.
 
 Source triage 2026-11-15 (libfpv / SimITL, rl-tools l2f; tools/sim_source_triage.py) — the
-sizes quoted in REFERENCES.md and in the registry entries imu_rotor_vibration,
-propwash_thrust_unsteadiness and rotor_drag_hforce."""
+sizes quoted in REFERENCES.md and in the registry entries rotor_imbalance_vibration,
+propwash_thrust_unsteadiness, rotor_gust_gradient and rotor_drag_hforce."""
 
 import json
 import math
@@ -157,3 +157,17 @@ def test_simitl_propwash_and_vibration_sizes():
     assert vib["full"] / vib["white"] == pytest.approx(36, abs=1)
     assert vib["hover"] / vib["white"] == pytest.approx(3.3, abs=0.1)
     assert triage.simitl_angular_damping_fraction(200.0) < 0.005
+
+
+def test_measured_propwash_sizes():
+    """Veismann et al. 2023 fluctuation levels on the racer (independent-rotor bound)."""
+    assert triage.measured_propwash_sigma(0.5, 0.17) == pytest.approx(0.08, abs=0.005)
+    assert triage.measured_propwash_sigma(1.25, 0.20) == pytest.approx(0.20)
+    lo = triage.measured_propwash_roll(RACER_5IN, 0.14, 0.76)
+    hi = triage.measured_propwash_roll(RACER_5IN, 0.20, 0.67)
+    assert lo["roll_accel_rms"] == pytest.approx(15.0, abs=0.5)
+    assert hi["roll_accel_rms"] == pytest.approx(18.8, abs=0.5)
+    assert 0.02 < lo["fraction_of_authority"] < hi["fraction_of_authority"] < 0.035
+    # SimITL's stand-in keeps growing where the measurement has already peaked
+    _, v_h = triage.hover(RACER_5IN)
+    assert triage.simitl_propwash_loss(2 * v_h) > triage.simitl_propwash_loss(1.25 * v_h)

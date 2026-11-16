@@ -32,6 +32,7 @@ from functools import cache
 import jax
 import jax.numpy as jnp
 import sympy as sp
+from sympy.codegen.cfunctions import expm1
 
 from skyflow_dynamics.spec import dynamics, motor, parameters, sensors
 from skyflow_dynamics.spec.discretization import rk4_step
@@ -198,6 +199,36 @@ def throttle_to_speed_fn():
     u, w_min, w_max, k = sp.symbols("u w_min w_max k", real=True)
     return sp.lambdify((u, w_min, w_max, k),
                        motor.throttle_to_speed(u, w_min, w_max, k), modules="jax")
+
+
+@cache
+def imu_bias_step_fn():
+    """
+    Exact Gauss–Markov (Ornstein–Uhlenbeck) IMU bias step, generated from the verified
+    spec.sensors.imu_bias_gauss_markov_step:
+
+        b⁺ = e^(−dt/τ)·b + σ_b·√(τ/2·(1 − e^(−2dt/τ)))·w
+
+    Returns f(b, w, tau, sigma_b, dt) — elementwise, broadcasts over any batch shape (one
+    call advances a whole fleet's gyro or accelerometer bias rows). w is a unit-normal
+    draw; drawing it, and the power-up bias, stay harness-side. sigma_b is the bias
+    driving-noise density ([unit]/√s): the stationary std is sigma_b·√(τ/2), and a very
+    large τ gives the pure random walk b⁺ = b + sigma_b·√dt·w.
+
+    The spec's 1 − e^(−2dt/τ) is emitted as −expm1(−2dt/τ). The two are identical in exact
+    arithmetic; in float32 the literal form loses the driving noise once τ is a few
+    hundred times dt (0.05 % low at τ/dt = 3e5, 67 % low at 1e12), exactly the regime a
+    slow sensor bias lives in.
+    """
+    b, w = sp.symbols("b w", real=True)
+    tau, sigma_b, dt = sp.symbols("tau sigma_b dt", positive=True)
+    expr = sensors.imu_bias_gauss_markov_step(sp.Matrix([b]), tau, sigma_b, dt,
+                                              sp.Matrix([w]))[0]
+    stable = expr.subs(1 - sp.exp(-2 * dt / tau), -expm1(-2 * dt / tau))
+    if not stable.has(expm1):
+        raise RuntimeError("imu_bias_gauss_markov_step changed form: the expm1 rewrite "
+                           "no longer applies")
+    return sp.lambdify((b, w, tau, sigma_b, dt), stable, modules="jax")
 
 
 @cache
