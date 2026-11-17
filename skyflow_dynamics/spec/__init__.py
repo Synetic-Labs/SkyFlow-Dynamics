@@ -17,6 +17,7 @@ Conventions (see README.md for the full statement):
 
 from skyflow_dynamics.spec import (  # noqa: F401  # noqa: F401  # noqa: F401
     atmosphere,
+    descent,
     discretization,
     dynamics,
     frames,
