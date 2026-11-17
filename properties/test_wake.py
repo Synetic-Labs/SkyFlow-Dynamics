@@ -403,3 +403,256 @@ def test_neurobem_near_axial_descent_envelope():
     assert bins[(0.2, 0.3)]["ratio"] - bins[(0.4, 0.5)]["ratio"] == pytest.approx(0.04, abs=0.015)
     assert bins[(-0.6, -0.4)]["ratio"] < bins[(0.0, 0.1)]["ratio"] < bins[(0.2, 0.3)]["ratio"]
     assert sum(b["n"] for b in DESCENT["neurobem_near_axial"] if b["x"][0] >= 0.4) < 1500
+
+
+# ---------------------------------------------------------------- F-36: whole-quadcopter ground effect
+# golden/checkdata/ground_ceiling.json, frozen by tools/ground_data.py from Du Mutel et al.
+# 2024 (Zenodo 13166292, pinned by sha256): a quadcopter on a load cell, 10 in and 12 in
+# propellers, a panel at 5–100 cm, rotor speed measured. The ratio is at matched rotor speed.
+
+GROUND = json.loads((pathlib.Path(__file__).resolve().parent.parent / "golden" / "checkdata"
+                     / "ground_ceiling.json").read_text())
+
+
+def test_f36_single_propeller_constants_predict_a_whole_quadcopter():
+    """Measured evidence for ground_effect_fixed_rpm: He & Leang's constants for one 5×3
+    propeller (C_a 0.53, C_b 1.80; another lab, not fitted here) give 0.020 rms (12 in) and
+    0.024 (10 in) against 0.14 and 0.12 for the backend, which has no ground effect. Fixed-
+    pitch Cheeseman–Bennett with the F-35 descent s = 0.44 gives 0.035 and 0.033."""
+    for prop in ("12in", "10in"):
+        m = GROUND["ground"][prop]["model_rms"]
+        assert m["he_leang_5x3"] < 0.03, prop
+        assert m["he_leang_5x3"] < 0.25 * m["backend"], prop
+        assert m["cheeseman_bennett_fixed_pitch_s044"] < 0.3 * m["backend"], prop
+    near = GROUND["ground"]["12in"]["points"][0]
+    assert near["z_over_R"] == pytest.approx(0.33, abs=0.01)
+    assert near["ratio"] == pytest.approx(1.26, abs=0.01)
+
+
+def test_f36_fitted_constants_are_single_propeller_values():
+    """Fitted freely, the whole vehicle gives C_a 0.47/0.53 and C_b 1.74/2.08 — inside He &
+    Leang's single-propeller ranges (0.27–0.63, 1.18–2.87). Fixed-pitch s 0.46/0.58 sits with
+    the descent fit (F-35 median 0.44): one inflow sensitivity behind both."""
+    for prop in ("12in", "10in"):
+        f = GROUND["ground"][prop]["fit_he_leang"]
+        assert 0.27 <= f["C_a"] <= 0.63 and 1.18 <= f["C_b"] <= 2.87, prop
+        assert 0.27 <= GROUND["ground"][prop]["fit_fixed_pitch"]["s"] <= 0.63, prop
+    assert GROUND["ground"]["12in"]["fit_fixed_pitch"]["s"] == pytest.approx(0.44, abs=0.05)
+
+
+def test_f36_constant_power_and_fitted_g_forms_overshoot():
+    """Near the ground the constant-power forms overshoot: Cheeseman–Bennett 2.39 and
+    Sanchez-Cuevas (images only) 2.55 against 1.26 measured at z/R = 0.33; worse than no
+    model below their z/R ≥ 0.5 envelope, within 0.03 inside it. pybullet's additive form
+    needs G ≤ 1.5 here, not 11.37."""
+    for prop in ("12in", "10in"):
+        g = GROUND["ground"][prop]
+        assert g["model_rms"]["cheeseman_bennett"] > g["model_rms"]["backend"]
+        assert g["model_rms"]["sanchez_cuevas_kb0"] > g["model_rms"]["backend"]
+        for p in g["points"]:
+            if p["z_over_R"] >= 0.5:
+                assert abs(p["models"]["cheeseman_bennett"] - p["ratio"]) < 0.03
+            if p["z_over_R"] <= 2.0:
+                assert p["pybullet_G_implied"] < 1.6
+    near = GROUND["ground"]["12in"]["points"][0]["models"]
+    assert near["cheeseman_bennett"] == pytest.approx(2.39, abs=0.01)
+
+
+def test_f36_ceiling_is_weaker_near_and_reaches_further():
+    """12 in, same rotor speed: a ceiling adds 15 % at z/R = 0.33 (ground: 26 %) but more
+    than the ground beyond 1.6 R (+3.8 / +1.9 % at 1.6 / 2.3 R, ground +1.9 / −1.3 %)."""
+    g = {round(p["D_cm"]): p["ratio"] for p in GROUND["ground"]["12in"]["points"]}
+    c = {round(p["D_cm"]): p["ratio"] for p in GROUND["ceiling"]["12in"]["points"]}
+    assert c[5] == pytest.approx(1.146, abs=0.01) and c[5] < g[5]
+    assert c[25] > g[25] and c[35] > g[35]
+    assert c[35] > 1.01
+
+
+def test_f36_tachometer_quality():
+    """The 12 in tachometers agree to 1.5 %; the 10 in ones disagree by up to 10 %, so the
+    10 in ratios carry a ±10 % band and the 12 in runs are the reliable set."""
+    assert max(p["tach_gap"] for p in GROUND["ground"]["12in"]["points"]) < 0.015
+    assert max(p["tach_gap"] for p in GROUND["ground"]["10in"]["points"]) > 0.05
+
+
+def test_f36_frozen_models_reproduce_from_the_spec():
+    from tools import ground_data as gd
+    for prop in ("12in", "10in"):
+        g = GROUND["ground"][prop]
+        for p in g["points"]:
+            fresh = gd.candidates(p["z_over_R"], g["R_m"])
+            for name, value in p["models"].items():
+                assert fresh[name] == pytest.approx(value, rel=1e-9), (prop, name)
+
+
+# ---------------------------------------------------------------- F-38: inter-vehicle downwash
+# golden/checkdata/downwash_maps.json, frozen by tools/downwash_data.py from Kiran, Ayanian &
+# Breuer's RSS 2025 data (Hugging Face ajkiran18/QuadrotorDownwash, pinned by sha256): two
+# Crazyflies on load cells, the lower one fixed, both at a fixed hover command on 4 V (rotor
+# speed not held). The data are not redistributed; these tests check the frozen numbers and
+# that the spec still reproduces its side of the comparison.
+
+DOWNWASH = json.loads((pathlib.Path(__file__).resolve().parent.parent / "golden" / "checkdata"
+                       / "downwash_maps.json").read_text())
+DW_ROWS = DOWNWASH["force_rows"]
+DW_VALID = [r for r in DW_ROWS if "pybullet" in r]          # Δz ≥ 0.7 m, the fit's range
+
+
+def test_f38_pybullet_downwash_overpredicts_the_centreline():
+    """In its own range (Δz 0.7–1.1 m) the pybullet fit takes 24–58 % of the lower
+    Crazyflie's weight; the measured loss is 1.8–3.6 % (12–16×). The measured loss steps
+    down 3.5× between 0.60 and 0.70 m; against the near block's own trend extended past the
+    step, and at 0.5–0.6 m just outside the fit's range, the fit is still 6–8× too strong."""
+    assert len(DW_VALID) == 5
+    for r in DW_VALID:
+        assert 0.015 <= r["loss_centre"] <= 0.04, r["dz_m"]
+        assert 12 <= r["pybullet"]["ratio_centre"] <= 17, r["dz_m"]
+    for e in DOWNWASH["near_block"]["extrapolated"] + DOWNWASH["near_block"]["outside_range"]:
+        assert 6 <= e.get("pybullet_ratio", e.get("ratio")) <= 8, e["dz_m"]
+
+
+def test_f38_pybullet_core_is_too_narrow():
+    """The fit's Gaussian half-width at half maximum is 2–78 mm over 0.7–1.1 m; the
+    measured loss falls to half at 0.11–0.14 m off the axis. Integrated over the plane the
+    fit swings from 0.003 to 3.4 times the measured impulse, so no rescaling of c1 fixes it:
+    the form (a CoM point force with β = 0.16·Δz − 0.11) is wrong, not only the size."""
+    for r in DW_VALID:
+        assert r["pybullet"]["half_max_x_m"] < 0.08
+        assert 0.11 <= r["half_loss_x_m"] <= 0.15
+    ratios = [r["pybullet"]["integral_Nm2"] / r["pybullet"]["measured_integral_Nm2"] for r in DW_VALID]
+    assert min(ratios) < 0.01 and max(ratios) > 3
+
+
+def test_f38_measured_step_is_not_in_the_wake():
+    """Centreline loss 12.7 % at 0.60 m, 3.6 % at 0.70 m. The single-vehicle wake speed at the
+    lower rotors (PIV, front-rotor chords) falls only 12 % over the same step: the step is in
+    the force map, not in the flow, and is unexplained."""
+    by = {round(r["dz_m"], 2): r for r in DW_ROWS}
+    assert by[0.6]["loss_centre"] / by[0.7]["loss_centre"] > 3.0
+    pv = {round(e["dz_m"], 2): e["u_rotor_over_Ui"] for e in DOWNWASH["inflow_sensitivity"]}
+    assert pv[0.7] / pv[0.6] > 0.85
+
+
+def test_f38_wake_is_a_round_jet_with_a_far_virtual_origin():
+    """The merged wake (z/l 6.5–23.8) fits B/(z − z0)·exp(−c·x²/(z − z0)²) to 0.03 U_i rms with
+    the virtual origin 0.37 m ABOVE the rotor plane and c = 91 (spread rate 0.087, the
+    classical round-jet value). Jain's published z0 (0.03–0.11 m below) misses the centreline
+    by up to 70 %, and his c_rad 25–61 is a 1.2–1.9× wider jet. The mean wake carries 83–98 %
+    of the thrust momentum only if U_i ≈ 8.2 m/s (the paper's Re example); with its Eq. (1)
+    (U_i = v_h ≈ 4.05 m/s) it would carry about 20 %, so the field is read with U_i ≈ 2·v_h."""
+    jet = DOWNWASH["jet"]
+    assert jet["rms"] < 0.03
+    assert jet["z0_m"] < -0.3
+    assert 0.08 <= jet["S_half_width"] <= 0.095
+    assert jet["c_rad"] > 60.8
+    assert jet["centreline_fits"]["free"]["max_rel_err"] < 0.15
+    assert jet["centreline_fits"]["z0_jain_0.07m"]["max_rel_err"] > 0.5
+    mom = jet["momentum_over_W_at_z_l_8_15_22"]
+    assert all(0.8 <= m <= 1.0 for m in mom["re_example"])
+    assert all(m < 0.3 for m in mom["eq1_n4"])
+
+
+def test_f38_frozen_comparison_reproduces_from_the_spec():
+    """spec.ground_effect.pybullet_downwash_force gives the frozen pybullet column, and
+    jain_wake_velocity with the frozen fit gives the frozen centreline speed."""
+    c = DOWNWASH["constants"]
+    p = c["pybullet"]
+    for r in (DW_VALID[0], DW_VALID[-1]):
+        F = ground_effect.pybullet_downwash_force(r["dz_m"], 0.0, p["R"], p["c1"], p["c2"], p["c3"])
+        assert -float(F) / c["W_N"] == pytest.approx(r["pybullet"]["loss_centre"], rel=1e-9)
+    jet = DOWNWASH["jet"]
+    U = c["U_i_cases"]["re_example"]
+    A_p = math.pi * c["R_prop_m"] ** 2
+    T_prop = 2 * c["rho"] * A_p * c["v_h"] ** 2                 # per-rotor hover thrust
+    l = c["l_m"]
+    for s in jet["slices"][4:]:
+        z = s["z_l"] * l
+        V = ground_effect.jain_wake_velocity(z, 0.0, T_prop, c["rho"], A_p, 2 * l,
+                                             jet["z0_m"], jet["c_ax"]["re_example"], jet["c_rad"])
+        assert float(V) / U == pytest.approx(s["model_u_max"], rel=0.02)
+
+
+# ---------------------------------------------------------------- F-37: rotor-on-rotor interference
+# golden/checkdata/rotor_interference.json, frozen by tools/rotor_interference_data.py from the
+# NASA MTB2 data tables (pinned by sha256; 24.5 in two-blade rotors, hub spacing 2.69R, back
+# rotors raised 0 / 0.33 / 0.57 R). Metric: slope of thrust against ρ·rpm² over 2000–3000 rpm
+# against the same rotor alone (the load cells carry run-dependent additive offsets).
+
+RI = json.loads((pathlib.Path(__file__).resolve().parent.parent / "golden" / "checkdata"
+                 / "rotor_interference.json").read_text())
+
+
+def _row(table, layout, rotor, vbin):
+    return next(t for t in RI["tables"][table]
+                if (t["layout"], t["rotor"], t["vbin"]) == (layout, rotor, vbin))
+
+
+def test_f37_front_rotor_feels_no_back_rotor():
+    """In line, the front rotor is unchanged to ±1.5 % (median) at 20 and 40 ft/s in every
+    layout, and blade phase (0 against −90 deg) moves thrust by under 1 % — the +6 to +13 %
+    in the raw point ratios is a load-cell offset, gone in the slope metric."""
+    for lay in ("equal", "concept", "tall"):
+        for v in (20, 40):
+            assert abs(_row("tandem", lay, 1, v)["median"]) < 0.015, (lay, v)
+    assert abs(RI["phase_0_vs_m90"]["median"]) < 0.01
+    assert RI["phase_0_vs_m90"]["rms"] < 0.03
+    assert _row("tandem", "equal", 1, 20)["point_2500_median"] > 0.10
+
+
+def test_f37_back_rotor_loss_grows_with_speed_and_shrinks_with_height():
+    """Back rotor in line: −6.5 % / −28 % at 20 / 40 ft/s with both rotors at one height;
+    raising it 0.33R gives −2 % / −11 %, 0.57R gives 0 % / −9 %. Torque rises as thrust
+    falls (+5 to +17 %): the rotor works against air already moving down, as in a climb."""
+    t = {(lay, v): _row("tandem", lay, 3, v)["median"]
+         for lay in ("equal", "concept", "tall") for v in (20, 40)}
+    assert t[("equal", 20)] == pytest.approx(-0.065, abs=0.02)
+    assert t[("equal", 40)] == pytest.approx(-0.28, abs=0.04)
+    assert t[("equal", 40)] < t[("concept", 40)] < -0.08
+    assert t[("tall", 40)] == pytest.approx(-0.09, abs=0.02)
+    assert abs(t[("tall", 20)]) < 0.02 and abs(t[("concept", 20)]) < 0.04
+    for lay in ("equal", "concept", "tall"):
+        for v in (20, 40):
+            assert _row("tandem", lay, 3, v)["dQ_median"] > 0.03
+
+
+def test_f37_spec_factor_carries_the_size_with_descent_s():
+    """tandem_interference_factor + the linear inflow law, one free s over 48 back-rotor
+    conditions: s = 0.50 (0.37–0.56 by layout) — the descent median 0.44 (F-35) does as well
+    (rms 0.051 against 0.144 for no interference). Quadrotor back rotors (concept, tall): 0.53."""
+    f = RI["fits"]
+    assert f["tandem_back_all"]["s"] == pytest.approx(0.50, abs=0.05)
+    for lay in ("equal", "concept", "tall"):
+        assert 0.3 <= f[f"tandem_back_{lay}"]["s"] <= 0.65
+    assert f["tandem_back_all"]["rms_s044"] < 0.4 * f["tandem_back_all"]["rms_zero"]
+    assert f["quad_back_concept_tall"]["s"] == pytest.approx(0.53, abs=0.08)
+
+
+def test_f37_speed_trend_is_too_weak_in_the_factor():
+    """The factor's loss grows less than 2× from 20 to 40 ft/s (V/v_h ≈ 1.4 to 2.8); the
+    measured loss grows 4× (equal height) to over 10× (raised). Seen as a local s: 0.04–0.29
+    at 20 ft/s, 0.42–0.63 at 40 ft/s. At V/v_h ≈ 1.4 the steep front wake passes under a
+    raised back rotor and the factor still predicts a loss."""
+    loc = {(l["layout"], l["vbin"]): l["s_median"] for l in RI["local_s"]}
+    for lay in ("equal", "concept", "tall"):
+        assert loc[(lay, 20)] < 0.3, lay
+        assert 0.4 <= loc[(lay, 40)] <= 0.65, lay
+    assert loc[("tall", 20)] < 0.1
+
+
+def test_f37_side_by_side_and_front_rotors_gain_a_little():
+    """Side by side: +0.5 to +1.4 % at 20 ft/s, +3.6 to +3.9 % at 40 ft/s (upwash from the
+    neighbour). Front rotors of the quadrotor: +2 to +7 % (the lateral neighbour)."""
+    for r in (1, 2):
+        assert 0.0 < _row("sbs", "concept", r, 40)["median"] < 0.05
+        assert abs(_row("sbs", "concept", r, 20)["median"]) < 0.02
+    for lay in ("concept", "tall"):
+        for r in (1, 2):
+            assert 0.01 < _row("quad", lay, r, 40)["median"] < 0.09, (lay, r)
+
+
+def test_f37_frozen_factor_reproduces_from_the_spec():
+    """The spec's factor at the frozen hub-line geometry gives the frozen k."""
+    for t in RI["tandem_back_by_pitch"][::7]:
+        k = float(inflow.tandem_interference_factor(t["p"], math.radians(t["alpha_deg"]),
+                                                    math.radians(t["gamma_deg"])))
+        assert k == pytest.approx(t["k"], rel=0.02)

@@ -134,6 +134,31 @@ SOURCES = {s.key: s for s in [
            "2019 (accepted-version preprint read): an AscTec Hummingbird in free flight, "
            "hover fit Eq. (12), forward-flight fit Eq. (11)",
            "https://par.nsf.gov/servlets/purl/10181219"),
+    Source("dumutel2024", "David Du Mutel, Scanavino, Conyers et al. — Ground, ceiling and "
+           "wall effect evaluation of small quadcopters in pressure-controlled environments, "
+           "J. Intell. Robot. Syst. 110:125, 2024, doi 10.1007/s10846-024-02155-7. Setup "
+           "(§2.1.1, §3.1, Table 1) read; data from Zenodo 13166292 (CC-BY 4.0), pinned by "
+           "sha256 in tools/ground_data.py (F-36): a quadcopter on a load cell, 10×4.7 and "
+           "12×5 propellers, ground and ceiling panel at 5–100 cm, two rotor speeds logged",
+           "https://zenodo.org/records/13166292"),
+    Source("hsiao2019", "Hsiao & Chirarattananon — Ceiling Effects for Hybrid Aerial-Surface "
+           "Locomotion of Small Rotorcraft, IEEE/ASME Trans. Mechatronics, 2019 (preprint "
+           "read): momentum-theory ceiling coefficient γ(δ = R/D), Eqs. (6), (10), (14); the "
+           "thrust coefficient needs three blade-profile constants c0, c1, c2",
+           "https://arxiv.org/abs/1905.04632"),
+    Source("kiran2025", "Kiran, Ayanian, Breuer — Influence of Static and Dynamic Downwash "
+           "Interactions on Multi-Quadrotor Systems, RSS 2025, doi 10.15607/RSS.2025.XXI.102. "
+           "Sec. II-A, III-A/B, Figs. 5-9 and Table I read from the proceedings PDF (scanned). "
+           "Data: Hugging Face ajkiran18/QuadrotorDownwash (MIT), pinned by sha256 in "
+           "tools/downwash_data.py (F-38)",
+           "https://doi.org/10.15607/RSS.2025.XXI.102"),
+    Source("mtb2", "Conley, Russell, Kallstrom, Shirazi, Pereyra, Wright — Multirotor Test Bed "
+           "Second Wind Tunnel Entry Data Report, NASA/TM-20250004795, May 2025 (geometry, "
+           "Tables 7.2.1-7.2.2 and Appendix A read), and the data tables "
+           "mtbii_data_tables_v2.xlsx, pinned by sha256 in tools/rotor_interference_data.py "
+           "(F-37): 24.5 in two-blade rotors, loads and speed per rotor, single, tandem, "
+           "side-by-side and four-rotor layouts",
+           "https://rotorcraft.arc.nasa.gov/Research/Programs/MTB2.html"),
     Source("johnson2005", "Johnson — Model for Vortex Ring State Influence on Rotorcraft "
            "Flight Dynamics, NASA/TP-2005-213477, 2005. Text pp. 14-16, Table 3 (algorithm), "
            "Table 4 (constants) and Figs. 36-39 read from the report",
@@ -508,12 +533,14 @@ TERMS = (
          "Both forms confirmed against the report (2026-11-16): they hold at CONSTANT POWER. "
          "To first order that is an inflow sensitivity of 1; a fixed-pitch rotor at fixed "
          "speed has 0.27–0.63 (ground_effect_fixed_rpm), so it gains less. The report's own "
-         "flight tests agree above Z/R = 0.6.",
+         "flight tests agree above Z/R = 0.6. F-36 (whole quadcopter, rotor speed measured): "
+         "within 0.03 of the data at z/R ≥ 0.98, but 2.39 against 1.26 at z/R = 0.33 — "
+         "below its envelope it is worse than no ground effect at all.",
          decision="hold",
          effect=("RACER_5IN geometry: +6.7 % at z = R (0.5 rotor diameters), +0.4 % at 4R "
                  "(2 diameters). Measured at constant speed near z = R: +6 to +9 % for single "
                  "and paired rotors, +10 to +18 % for whole quadrotors (F-33)")),
-    Term("ground_effect_fixed_rpm", "candidate", "rotor_aero",
+    Term("ground_effect_fixed_rpm", "verified", "rotor_aero",
          "Ground effect at constant rotor speed: T/T_∞ = 1 + s·δ(z), δ the fraction of the "
          "induced velocity that the ground cancels — exp(−C_b·z/R), or the image-source "
          "(R/4z)²/(1 + (V/v_i)²)",
@@ -521,7 +548,7 @@ TERMS = (
          "spec.ground_effect.cheeseman_bennett_fixed_pitch, "
          "spec.ground_effect.ground_inflow_fraction_exponential, "
          "spec.ground_effect.ground_inflow_fraction_image",
-         ("he2020", "cheeseman1955", "carter2021", "kan2019"), (),
+         ("he2020", "cheeseman1955", "carter2021", "kan2019", "dumutel2024"), (),
          ("properties/test_wake.py",),
          "The form for an ESC-driven fixed-pitch propeller (the other thrust-ratio "
          "candidates are at constant power or fitted to one vehicle). s is the blade's "
@@ -537,10 +564,18 @@ TERMS = (
          "Crazyflie sits in it and still gains, so it is disputed), unsteady fountain "
          "re-ingestion below one diameter (CFD only), torque and power. Forward-flight "
          "washout 1/(1 + (V/v_i)²) is Cheeseman & Bennett's; flight data on a small "
-         "quadrotor show the height term dominating to V/v_h ≈ 1.2 (Kan et al.). To verify: "
-         "a thrust stand with a ground board at closed-loop speed, or a hover log with "
-         "rotor-speed telemetry and a height sensor.",
-         evidence=("analytic",),
+         "quadrotor show the height term dominating to V/v_h ≈ 1.2 (Kan et al.). "
+         "VERIFIED 2026-11-16 on measured data (F-36, tools/ground_data.py, Zenodo "
+         "13166292 pinned): a whole quadcopter at matched rotor speed, 10 in and 12 in "
+         "propellers, z/R 0.33–2.8. He & Leang's single-propeller 5×3 constants, not fitted "
+         "here, give 0.020 / 0.024 rms against 0.14 / 0.12 for the backend (no ground "
+         "effect); the fixed-pitch image form with the F-35 descent s = 0.44 gives 0.035 / "
+         "0.033. Fitted freely: C_a 0.47 / 0.53, C_b 1.74 / 2.08 — single-propeller values. "
+         "Envelope of the check: hover, four coplanar rotors at tip gaps 0.32 R and 0.78 R, "
+         "frame upstream of the rotors (no body in the fountain), a shared 100 cm reference "
+         "whose arm download may bias the ratios by +1 to +3 %. Next (backend): a height-"
+         "above-ground input per rotor and C_a, C_b parameters.",
+         evidence=("analytic", "measured"),
          decision="pursue",
          effect=("thrust gain at z/R = 0.5 / 1 / 2 / 4 with the 5×3 values: +21.5 / +8.8 / "
                  "+1.4 / +0.0 % — material below one rotor diameter. Whole quadrotors "
@@ -553,7 +588,11 @@ TERMS = (
          "Significant to z ≈ 5R. Reduces to Cheeseman-Bennett as d, b → ∞, K_b → 0. "
          "Constant-power form. Independent support: it fits a tethered Crazyflie's lift for "
          "1 < z/R < 3 (R² = 0.956, Carter et al. 2021), and whole quadrotors measure well "
-         "above a bare rotor (F-33). The body term is what a bare-rotor form lacks.",
+         "above a bare rotor (F-33). The body term is what a bare-rotor form lacks. F-36: "
+         "with no body in the fountain (frame upstream) and rotor speed held, a whole "
+         "quadcopter gains like a single propeller; this form overshoots even with K_b = 0 "
+         "(2.55 against 1.26 at z/R = 0.33, +6 % against +2 % at 1.6R) — its image terms "
+         "are at constant power. The body term itself remains untested.",
          decision="defer",
          revisit=("a consumer hovers, takes off or lands a vehicle whose body sits under the "
                   "rotor plane within 5 rotor radii of the ground, and ground_effect_fixed_rpm "
@@ -567,21 +606,59 @@ TERMS = (
          "G = 11.37 identified for CF2 (fountain amplification folded in); needs height clip. "
          "F-33: G is a far-field value. A tethered Crazyflie's measured gain needs G = 3.7 "
          "at z/R = 1.14 and 9.1 at 2.85 (Carter et al. 2021, Fig. 2a): a 1/z² law falls "
-         "faster than the data, so no single G fits. Do not use below z/R ≈ 2.5.",
+         "faster than the data, so no single G fits. Do not use below z/R ≈ 2.5. F-36: a "
+         "10–12 in quadcopter needs G = 0.4–1.5 at z/R ≤ 2 — G is vehicle-specific.",
          decision="hold",
          effect=("+71 % at z = R and +4.4 % at 4R with G = 11.37; nothing measured at "
                  "constant rotor speed exceeds +18 % near z = R (tools/wake_triage.py)")),
     Term("downwash_pybullet", "candidate", "disturbance",
          "Inter-vehicle Gaussian downwash force fit (DSL/SiQi Zhou)",
-         "spec.ground_effect.pybullet_downwash_force", ("pybullet_drones",), (),
-         ("properties/test_candidates.py",),
-         "CF2-specific fit, thrust-independent, untrustworthy below Δz ≈ 0.7 m."),
+         "spec.ground_effect.pybullet_downwash_force", ("pybullet_drones", "kiran2025"), (),
+         ("properties/test_candidates.py", "properties/test_wake.py"),
+         "CF2-specific fit, thrust-independent, untrustworthy below Δz ≈ 0.7 m. F-38: "
+         "contradicted in its own range by load-cell maps of two Crazyflies (Kiran et al. "
+         "2025): at 0.7–1.1 m it gives 24–58 % of the weight on the centreline, measured "
+         "1.8–3.6 % (12–16×; 6–8× against the measured near-field trend, which steps down "
+         "between 0.6 and 0.7 m). Its core (half-max 2–78 mm) is far narrower than measured "
+         "(0.11–0.14 m), so rescaling c1 does not fix it.",
+         decision="hold",
+         effect=("measured on a Crazyflie: 1.8–3.6 % of weight lost at 0.7–1.1 m directly "
+                 "below another, 13–37 % at 0.13–0.60 m; the fit predicts 6–16× more")),
     Term("downwash_jain_jet", "candidate", "disturbance",
          "Turbulent-jet wake velocity field + frame drag + per-rotor thrust loss",
-         "spec.ground_effect.jain_wake_velocity", ("jain2019",), (),
-         ("properties/test_candidates.py",),
+         "spec.ground_effect.jain_wake_velocity", ("jain2019", "kiran2025"), (),
+         ("properties/test_candidates.py", "properties/test_wake.py"),
          "Thrust-scaled, gives force AND moment; ZEF only (z > 3L). Route wake velocity "
-         "through ONE rotor-inflow path to avoid double-counting with AoA thrust terms."),
+         "through ONE rotor-inflow path to avoid double-counting with AoA thrust terms. "
+         "F-38: the form fits a Crazyflie's PIV wake (z/l 6.5–24, 0.023 U_i rms) with a "
+         "virtual origin 0.37 m ABOVE the rotor plane, c_rad = 91 (round-jet spread 0.087) "
+         "and c_ax ≈ 11.6 (L = 2l, reading the field with U_i ≈ 2·v_h, which closes the "
+         "momentum flux); the published z0 (0.03–0.11 m below) misses the centreline by up "
+         "to 70 %. Constants are per vehicle: refit, do not copy.",
+         decision="defer",
+         revisit=("a consumer flies two vehicles within about 1 m vertically; fit z0, c_ax "
+                  "and c_rad to that vehicle's wake first"),
+         effect=("Crazyflie wake centreline 0.56–0.33 of 2·v_h from 0.21 to 0.76 m below; "
+                 "the lower vehicle loses 37 % of its weight at 0.13 m and 13 % at 0.6 m "
+                 "(F-38) — material for stacked flight, absent for one vehicle")),
+    Term("ceiling_effect", "proposed", "rotor_aero",
+         "A surface ABOVE the rotors raises thrust at fixed rotor speed: weaker than the "
+         "ground near it, but reaching further",
+         "", ("dumutel2024", "hsiao2019"), (),
+         ("properties/test_wake.py",),
+         "No spec term. Measured (F-36, 12×5 whole quadcopter, rotor speed matched): +14.6 / "
+         "+4.7 / +3.8 / +1.9 % at z/R = 0.33 / 0.98 / 1.64 / 2.30, against +26 / +10 / +2 / "
+         "−1 % for the ground at the same heights. Hsiao & Chirarattananon give a momentum-"
+         "theory form, γ = ½ + ½·√(1 + δ²/8) with δ = R/D, but thrust at fixed speed needs "
+         "three blade-profile constants (their Eq. 14) and two empirical multirotor factors, "
+         "which these data cannot separate. A route through inflow_thrust_law (the ceiling "
+         "lowers the induced velocity) is the obvious candidate form; not derived yet.",
+         decision="defer",
+         revisit=("a consumer flies within about 3 rotor radii under a ceiling, a bridge or "
+                  "an overhang for longer than a pass, or perches"),
+         effect=("whole 12 in quadcopter: +14.6 % at z/R = 0.33, +4.7 % at 1, +1.9 % at 2.3; "
+                 "on RACER_5IN that is about 2 cm and 6 cm under a surface — a pass under a "
+                 "gate bar, not a sustained condition in racing")),
 
     # ---------------- candidates: inflow / propeller / atmosphere ----------------
     Term("momentum_induced_velocity", "verified", "rotor_aero",
@@ -800,8 +877,12 @@ TERMS = (
          "fitted to 18 tabulated descent curves (with vrs_johnson_inflow) s has median 0.44, "
          "IQR 0.36–0.67 — inside the ground-effect C_a range, so one s serves both; s from "
          "geometric pitch does not (0.4–3.3 on cambered low-pitch APC propellers, which have "
-         "a negative zero-lift angle). Identify s from data, not from the pitch. To "
-         "verify: C_T(J) tables that reach negative J, or a descent test at constant speed.",
+         "a negative zero-lift angle). Identify s from data, not from the pitch. F-36: a "
+         "whole quadcopter's ground effect fits s = 0.46 (12×5) and 0.58 (10×4.7) — the "
+         "ground and descent values agree on another lab's propellers. F-37: NASA MTB2 rear "
+         "rotors in a front wake fit s = 0.50 (0.37–0.56 by layout). To verify: a test "
+         "that varies the inflow at constant speed by a known amount (a descent test, or "
+         "a measured external wake).",
          evidence=("analytic",),
          decision="pursue",
          effect=("RACER_5IN: the backend's k_z is s = 0.17 frozen, 0.41 with momentum inflow; "
@@ -1130,7 +1211,7 @@ TERMS = (
     Term("rotor_wake_interference", "candidate", "rotor_aero",
          "Rear rotors in the front rotors' wake: extra downwash k·v_i at the rear disk, k "
          "from a horseshoe-vortex wake as a function of spacing, incidence and wake angle",
-         "spec.inflow.tandem_interference_factor", ("nguyen2018", "russell2018"), (),
+         "spec.inflow.tandem_interference_factor", ("nguyen2018", "russell2018", "mtb2"), (),
          ("properties/test_wake.py",),
          "Every rotor in the spec is aerodynamically isolated. Measured and computed "
          "rear-rotor thrust deficits near level flight: 11 % (wind tunnel, l/R = 2.5, "
@@ -1144,7 +1225,16 @@ TERMS = (
          "in axial climb. Side-by-side rotors see a small upwash (favourable). The thrust "
          "change goes through inflow_thrust_law (ONE inflow path). Installation loss is a "
          "separate constant: full vehicle over four isolated rotors is 0.85–0.95 in hover "
-         "(5–15 % download; a c_T identified in flight already contains it).",
+         "(5–15 % download; a c_T identified in flight already contains it). F-37 (NASA "
+         "MTB2 tables, 24.5 in rotors, hub spacing 2.69R): back rotor in line −6.5 / −28 % "
+         "at 20 / 40 ft/s with the rotors at one height, −2 / −11 % raised 0.33R, 0 / −9 % "
+         "raised 0.57R; the front rotor is unchanged (±1.5 %); the back rotor's torque "
+         "rises 5–17 % as its thrust falls (not modelled). This factor (hub line as "
+         "reference) with the descent s = 0.44 held out gives 0.051 rms over 48 conditions "
+         "against 0.144 for no interference; fitted, s = 0.50 — no new constant. NOT "
+         "verified: it gets the speed trend wrong (local s 0.04–0.29 at V/v_h ≈ 1.4, "
+         "0.42–0.63 at 2.8), over-predicting slow near-level flight when the back rotor "
+         "sits above a steep front wake. Blade phase moves mean thrust under 1 %.",
          evidence=("analytic",),
          decision="defer",
          revisit=("a consumer flies slow, near-level forward flight (5–12 m/s, under 15° of "
@@ -1154,7 +1244,8 @@ TERMS = (
          effect=("RACER_5IN rear rotors, s = 0.5: −10 % thrust at 6 m/s and 5° nose-down, "
                  "−12 % at 10 m/s and 8°, −2.5 % at 20 m/s and 30°, −0.2 % at 35 m/s and "
                  "60° — material in slow level flight, gone at racing attitude "
-                 "(tools/wake_triage.py)")),
+                 "(tools/wake_triage.py). F-37 suggests the slowest cases are over-stated "
+                 "(measured local s 0.04–0.29 at V/v_h ≈ 1.4 on MTB2)")),
     Term("rotor_gust_gradient", "proposed", "disturbance",
          "Per-rotor wind: each rotor's local airspeed uses the air velocity at its own hub, "
          "so a gust that differs across the airframe makes a torque",

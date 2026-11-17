@@ -1447,6 +1447,168 @@ read-offs. `tools/descent_data.py` fetches them, checks sha256, parses, fits, an
   touch) and rises to 1.05 at 0.6–0.8, where frame drag grows. Onset of the band at about
   0.4; it cannot decide k. The frame's vertical drag is not separable from k_z here (F-30).
 
+### F-36 (a whole quadcopter at fixed rotor speed gains like a single propeller) — **`ground_effect_fixed_rpm` verified (measured), notes on 4 candidates, 1 proposed term**
+
+Source: David Du Mutel et al., J. Intell. Robot. Syst. 110:125 (2024); data Zenodo 13166292
+(CC-BY 4.0). Setup read from the paper (§2.1.1, §3.1, Table 1): an 'x' quadcopter frame,
+500 mm between diagonal motors, on a six-axis load cell in a climatic chamber at 20 °C and
+1000 hPa; T-Motor 2212 920 kV with 10×4.7 or 12×5 propellers; the same open-loop PWM to all
+four ESCs, four levels, 50 s each, run twice; two tachometers on two of the rotors; a 1 m²
+panel 5, 15, 25, 35 and 100 cm from the propeller plane. Normal propellers make it a ceiling;
+reversed propellers blow onto it as a ground. `tools/ground_data.py` fetches the archive,
+checks sha256, takes the ratio (F/Ω̄²)(D) / (F/Ω̄²)(100 cm) at each PWM level and freezes
+`golden/checkdata/ground_ceiling.json`; `properties/test_wake.py` checks it.
+
+Ground, 12×5 (z/R from the propeller plane; T/T_∞ at matched rotor speed, mean of the four
+PWM levels):
+
+| z/R | measured (PWM spread) | backend | C–B (constant power) | C–B fixed pitch, s = 0.44 | He & Leang 5×3 | Sanchez-Cuevas K_b = 0 / 2 | pybullet G = 11.37 |
+|---|---|---|---|---|---|---|---|
+| 0.33 | 1.261 (1.22–1.29) | 1 | 2.385 | 1.255 | 1.294 | 2.55 / 2.81 | 7.60 |
+| 0.98 | 1.096 (1.07–1.11) | 1 | 1.069 | 1.028 | 1.090 | 1.12 / 1.22 | 1.73 |
+| 1.64 | 1.019 (1.01–1.04) | 1 | 1.024 | 1.010 | 1.028 | 1.06 / 1.14 | 1.26 |
+| 2.30 | 0.987 (0.97–1.00) | 1 | 1.012 | 1.005 | 1.008 | 1.04 / 1.09 | 1.14 |
+| rms | | 0.139 | 0.562 | 0.035 | **0.020** | 0.65 / 0.78 | 3.19 |
+
+- **10×4.7:** the same picture (z/R 0.39–2.76; He & Leang 0.024 rms, backend 0.119), but its
+  two tachometers disagree by 4–10 % below 100 cm (1 % at 100 cm), so each ratio carries a
+  band of about ±0.1. The 12 in tachometers agree to 1.5 %.
+- **Verified:** He & Leang's constants for ONE three-blade 5×3 propeller (another lab, not
+  fitted here) predict a whole quadcopter to 0.02 rms — seven times better than no ground
+  effect. Fitted freely: C_a 0.47 / 0.53 and C_b 1.74 / 2.08 (12 / 10 in), inside the
+  single-propeller ranges. Fixed-pitch Cheeseman–Bennett fits s = 0.46 / 0.58, beside the
+  descent fit (F-35 median 0.44): one inflow sensitivity serves ground effect and descent.
+- **The constant-power forms overshoot below their envelope:** Cheeseman–Bennett 2.39 and
+  Sanchez-Cuevas (images only) 2.55 against 1.26 at z/R = 0.33 — worse than no model. Inside
+  z/R ≥ 0.5 Cheeseman–Bennett is within 0.03. The additive pybullet form needs G = 0.4–1.5
+  at z/R ≤ 2 on this vehicle, against 11.37 identified on the Crazyflie.
+- **What this setup cannot show:** in the ground runs the frame sits upstream of the
+  rotors, so there is no body in the fountain — Sanchez-Cuevas' body term (and the
+  Crazyflie's larger gain, F-33) is not tested. The two files share one 100 cm reference row
+  per propeller (identical values), so the ground runs are normalised by a run with the arms
+  in the wake: an estimated +1 to +3 % bias (arm download; inferred, not measured). The
+  −1.3 % at 2.3 R is inside that band; the multirotor loss region He & Leang and Conyers
+  report at 1.5–2 R is not resolved. The 100 cm reference is 6.6 R (12 in), which the paper
+  takes as out of ground effect.
+- **Ceiling (12×5, same reference, no orientation change):** +14.6 / +4.7 / +3.8 / +1.9 % at
+  z/R = 0.33 / 0.98 / 1.64 / 2.30 — less than the ground near the surface, more beyond
+  1.6 R. New proposed term `ceiling_effect` (`defer`). Hsiao & Chirarattananon's momentum
+  model (IEEE/ASME T-Mech 2019, arXiv 1905.04632, Eqs. 6, 10, 14 read) needs three blade-
+  profile constants these data cannot separate.
+- **Outcome:** `ground_effect_fixed_rpm` → verified (evidence: analytic, measured), still
+  `pursue` for the backend, which needs a per-rotor height input. Notes on
+  `ground_effect_cheeseman_bennett`, `ground_effect_sanchez_cuevas`, `ground_effect_pybullet`
+  and `inflow_thrust_law`. Wall-effect files (two labs) are in the archive, not used here.
+
+### F-37 (the rear rotor loses 0–28 % in the front rotor's wake; the tandem factor gets the size at s ≈ 0.44 but not the speed trend) — **public data, note on 1 candidate term**
+
+- **Data (read here, pinned by sha256 in `tools/rotor_interference_data.py`):** NASA Multirotor
+  Test Bed 2, 7- by 10-Foot Wind Tunnel, 2022 (Conley, Russell et al., data tables
+  `mtbii_data_tables_v2.xlsx`; report NASA/TM-20250004795, May 2025). Two-blade 24.5 in
+  rotors (E387, −16° twist), six loads and speed per rotor. Hubs 2.69R apart fore and aft,
+  2.67R side to side; back rotors raised dz/R = 0, 0.33, 0.57 (Appendix A, read). 20 and
+  40 ft/s (V/v_h ≈ 1.4 and 2.8 at 2500 rpm), model pitch 0 to −10°, tilt 0 and −3°,
+  2000/2500/3000 rpm, blade phase 0 to −90°.
+- **Method:** each rotor in a tandem, side-by-side or four-rotor run against the same rotor
+  alone, matched tilt, pitch, speed and set point. The load cells carry run-dependent
+  additive offsets (an idle position reads −1 to −5 N while the other motors run, a
+  different amount in each run type), so the metric is the slope of thrust against
+  ρ·rpm² over the three set points, not the point ratio (which shows a spurious +6 to +13 %
+  on the front rotor).
+- **Result, offset-free ΔT/T (median):**
+
+  | | dz/R | 20 ft/s | 40 ft/s |
+  |---|---|---|---|
+  | back rotor, in line | 0 | −6.5 % | −28 % |
+  | | 0.33 | −2 % | −11 % |
+  | | 0.57 | 0 % | −9 % |
+  | front rotor, in line | all | ±1.5 % | ±1 % |
+  | side by side (each) | 0.33 | +0.5 to +1.4 % | +3.6 to +3.9 % |
+  | quadrotor back (concept, tall) | 0.33 / 0.57 | −3 to −10 % | −8 to −15 % |
+  | quadrotor front | 0.33 / 0.57 | +2 to +5 % | +5 to +8 % |
+
+  Back-rotor torque rises 5–17 % while its thrust falls: it works against air already
+  moving down, as in a climb. Blade phase changes mean thrust by under 1 % (rms 1.7 %).
+- **Against `rotor_wake_interference`:** k from `tandem_interference_factor` with the hub
+  line as reference (p = along-stream spacing/R, tan α = height of the back hub across the
+  stream over the spacing, γ = front wake to hub line; dz = 0 is Nguyen's geometry), the
+  front wake from momentum theory with the measured front thrust, ΔT = −s·k·v_f/v_h·T_static.
+  One s over 48 back-rotor conditions: **s = 0.50** (0.37–0.56 by layout; four-rotor back
+  rotors 0.53); s = 0.44 from F-35 does as well (rms 0.051 against 0.144 for no interference).
+  So the factor and the descent s carry the size with no new constant.
+- **Where it fails:** the speed trend. The factor's loss grows less than 2× from 20 to
+  40 ft/s; the measured loss grows 4× at equal height and over 10× with the back rotor
+  raised. As a local s: 0.04–0.29 at V/v_h ≈ 1.4, 0.42–0.63 at 2.8. At the lower speed the
+  front wake is steep (γ ≈ 35–45°) and passes under a raised back rotor; the factor still
+  gives k = 0.2–0.4. Over-predicts the slow, near-level case by up to ~5 % of thrust.
+- **Not usable:** the equal-height four-rotor runs (152, 153): rotor 3 reads 42 % less
+  thrust than alone in wind-off hover at unchanged torque — a load-cell fault, left out.
+  Hover interference: wind-off points exist only at 2000 rpm, where the offsets are 10–25 %
+  of thrust, so no hover conclusion.
+- **Limits:** 24.5 in rotors at 2000–3000 rpm (tip Mach 0.19–0.29, Re far above a 5 in
+  propeller); two speeds only; the front-rotor reference (run 102) is reused for the
+  equal-height and tall layouts (its hub does not move). The slope metric assumes the
+  offset does not change with rotor speed within a run.
+- **Outcome:** note on `rotor_wake_interference` (stays candidate and `defer`; it beats no
+  interference with a held-out s but misses the speed trend, so it is not promoted).
+  The factor with s = 0.44 is the right size at V/v_h ≳ 2.5 and too large below
+  V/v_h ≈ 1.5 when the back rotor sits above the front wake. Side-by-side upwash is
+  favourable and small, as the note says.
+
+### F-38 (the pybullet downwash fit is 12–16× too strong and far too narrow; Jain's jet needs a far virtual origin) — **public data, notes on 2 candidate terms**
+
+Source: Kiran, Ayanian & Breuer, RSS 2025 (doi 10.15607/RSS.2025.XXI.102); data on Hugging
+Face (ajkiran18/QuadrotorDownwash, MIT). `tools/downwash_data.py` fetches the zip at a
+pinned revision, checks sha256, reads it in memory and freezes
+`golden/checkdata/downwash_maps.json`; `properties/test_wake.py` checks it.
+
+- **Setup (read from the paper, Sec. II-A, III-A; the PDF is scanned):** two Crazyflies,
+  each on an ATI Nano-17. The lower one is fixed; the upper one moves on an x–z stage,
+  0.1–0.6 m across and 0.1–1.1 m down. Both run at a fixed hover command on a 4 V tether,
+  about 320 Hz — voltage held, not rotor speed. W ≈ 0.265 N; lengths in l = 32.5 mm (body
+  centre to motor); mean F_z/W over three 30 s trials. The PIV is the time-averaged wake of
+  ONE hovering Crazyflie, in a vertical plane through the two front rotors.
+- **Assumed (not in the paper):** rotor radius 23.1 mm (cf2x.urdf), ρ = 1.204 kg/m³. The
+  baseline is the measured F/W at 0.6 m offset (1.008–1.010, not 1).
+- **`downwash_pybullet`, centreline, in its own range:**
+
+  | Δz (m) | measured loss (W) | pybullet (W) | ratio | measured half-loss offset | pybullet half-max offset |
+  |---|---|---|---|---|---|
+  | 0.70 | 0.036 | 0.584 | 16 | 0.12 m | 0.002 m |
+  | 0.80 | 0.033 | 0.447 | 14 | 0.11 m | 0.021 m |
+  | 0.90 | 0.029 | 0.353 | 12 | 0.11 m | 0.040 m |
+  | 1.00 | 0.020 | 0.286 | 14 | 0.14 m | 0.059 m |
+  | 1.10 | 0.018 | 0.237 | 13 | 0.12 m | 0.078 m |
+
+  The measured losses are 2–3.6 × the map's standard deviation (0.010 W).
+- **The step:** the measured centreline loss falls from 12.7 % at 0.60 m to 3.6 % at
+  0.70 m, while the PIV wake speed at the lower rotors falls only 12 %. The paper plots it,
+  calls the loss "negligible" above Δz/l ≈ 19, and does not explain it (a separate
+  measurement block is a guess). Against the near block's own trend extended past the step
+  (≈ exp(−2.8·Δz) over 0.35–0.60 m) the fit is still 6–8× too strong, and 6–7× at 0.5–0.6 m
+  just outside its range. The over-prediction does not depend on the step; its size does.
+- **Width:** the fit's core is 1–2 orders of magnitude narrower than measured; integrated
+  over the plane it swings from 0.003× to 3.4× the measured impulse. No single c1 fixes it:
+  the form (a point force at the CoM, β = 0.16·Δz − 0.11) is wrong, not only the constant.
+- **`downwash_jain_jet` against the PIV (merged wake, z/l 6.5–23.8):** the turbulent-jet
+  form fits to 0.023 U_i rms with c = 91.4 (spread rate 0.087, the classical round-jet
+  value) and a virtual origin 0.37 m ABOVE the rotor plane. Jain publishes z0 = +0.033 to
+  +0.110 m and c_rad 24.9–60.8 (a 1.2–1.9× wider jet); holding z0 = 0.07 m misses the
+  centreline by up to 70 %. The paper's own Table I (Bd 9.51, S 0.067) does not reproduce
+  from the released field (measured half-width ≈ 1.8× its S line).
+- **Normalisation (inferred):** the paper's Eq. (1) with n = 4 gives U_i = v_h = 4.05 m/s;
+  its Re example implies U_i ≈ 8.2 m/s ≈ 2·v_h. Momentum flux decides: at 8.2 m/s the mean
+  wake carries 83–98 % of W, at 4.05 m/s about 20 %. Read with U_i ≈ 2·v_h, c_ax = 11.4–11.9
+  (L = 2l) against Jain's 4.7–4.9.
+- **Inflow sensitivity s: not identifiable here.** The wake speed at the lower rotors
+  against the loss gives s = 0.96 at 0.13 m, 0.39 at 0.60 m, 0.11 at 0.70 m — the loss
+  falls about as (wake speed)^3.7, not linearly. Rotor speed is not held, the lower vehicle
+  changes the wake (the paper's Fig. 12), and the step.
+- **Outcome:** `downwash_pybullet`: `hold`, contradicted in its own range — do not use it.
+  `downwash_jain_jet`: `defer` — the form fits a measured quadrotor wake but the published
+  constants do not transfer; refit z0, c_ax and c_rad per vehicle. One vehicle type,
+  constant voltage, a single upper neighbour; the dynamic (moving-vehicle) data are not used.
+
 ### Public data survey — 2026-11-16
 
 What exists for the own-wake terms, checked by download unless marked.
@@ -1458,17 +1620,26 @@ What exists for the own-wake terms, checked by download unless marked.
 | Veismann thesis (Caltech 2022) / papers | thrust curves 4–6 in, figures and Table 1 | in `wake_triage.py` as read-offs; authors' data not public |
 | IDSIA nano-drone sys-id benchmark (github idsia-robotics) | Crazyflie 2.1 Brushless, 100 Hz, motor rad/s from bidirectional DShot, mocap | lowest altitude 0.5 m (≈ 18 R), descent ≤ 2 m/s (x ≤ 0.45): no ground effect, no VRS |
 | NanoBench (github syediu, 2026) | Crazyflie 2.1, 170 trajectories, PWM only (no rpm) | not checked further |
-| Blackbird, MIT | 10 h aggressive flight, rotor tachometers ≈ 190 Hz, mocap | server unreachable 2026-11-16 (4.9 TB set); not checked |
+| Blackbird, MIT (github mit-aera/Blackbird-Dataset) | 10 h aggressive flight, rotor tachometers ≈ 190 Hz, mocap | official host (blackbird-dataset.mit.edu, a dead CloudFront) gone since early 2024; one flight (clover, yaw forward, 5 m/s) survives in a third-party repo. Checked off-repo: in-flight thrust per Ω² 9 % below the bench value, translational lift fits s ≈ 0.55; takeoffs too short for ground effect, no VRS. Not frozen |
+| Du Mutel et al. 2024, Zenodo 13166292 | whole quadcopter on a load cell, ground / ceiling / wall panel at 5–100 cm, two rotor speeds | **F-36** (used) |
+| Kiran, Ayanian, Breuer, RSS 2025 (Hugging Face ajkiran18/QuadrotorDownwash, MIT) | Crazyflie-under-Crazyflie force and moment maps, PIV of one Crazyflie's wake | **F-38** (used) |
+| NASA Multirotor Test Bed 2 (rotorcraft.arc.nasa.gov, 2022 entry) | per-rotor loads and rpm: single, side-by-side, tandem, quad; vertical offsets, wind, pitch | **F-37** (used) |
+| TU Delft accelerating propeller (Zenodo 23083730) | thrust, rpm and PIV through rotor-speed steps | dynamic inflow; no spec term; not used |
+| FPV-DB (Hugging Face fpvdb/fpv-components) | 6 786 manufacturer static-thrust points, 163 FPV motors | static c_T priors only |
+| AscTec Pelican, Waterloo (github wavelab/pelican_dataset) | 54 flights, mocap, "motor speed" | speed estimated from current, landings cut, descent ≤ 0.35 v_h: not usable |
+| Hugging Face PX4 sets (PX4Forecast, UAV-SEAD, two log mirrors); UPNAdrone/WindTunnel | Flight Review copies, or fan-array calibration | nothing beyond Flight Review; not a vehicle |
+| ArduLogs (Zenodo 11525490); data.gov, Figshare, Dataverse, 4TU searches | 1 104 ArduPilot logs; catalogues | no rpm channel confirmed; nothing relevant found |
 | 4TU "quadrotor launched in the air" (Blaha et al. 2024) | Betaflight logs (.bfl) of a small quad, csv | not checked; thrown launches, no ground segment |
 | TII "Race Against the Machine" (github tii-racing) | Betaflight racer > 21 m/s, mocap, motor commands | rpm not confirmed; not checked |
 | Neural-Fly (github aerorobotics) | wind-tunnel flights, Caltech | fan duty cycle, rotor rpm not confirmed |
 | PX4 Flight Review (logs.px4.io, CC-BY) | 490 907 public logs, 335 218 quadrotor | 16 sampled: real ESC rpm in 2, rangefinder data in 6, both in 1 (DEXI 5); default logging gives rpm at 4 Hz, range at 1 Hz — too slow for ground effect without mining thousands of logs |
 | Ground effect: Neural Lander, Kan et al., ZJU ground-effect controller | flight data near the ground | not released (ZJU: "to be uploaded") |
 
-Gaps that remain: a whole-vehicle ground-effect log (hover at several heights with rotor
-speed at ≥ 50 Hz), any descent data at Crazyflie scale, a constant-speed descent curve of a
-5 in FPV propeller as a dataset, and propwash fluctuation data on a vehicle with rotor-speed
-telemetry. All four are cheap to record with one Betaflight quad with bidirectional DShot.
+Gaps that remain: whole-vehicle ground effect with the body in the fountain (F-36 has the
+frame upstream) or in free flight, any descent data at Crazyflie scale, a constant-speed
+descent curve of a 5 in FPV propeller as a dataset, and propwash fluctuation data on a
+vehicle with rotor-speed telemetry. All four are cheap to record with one Betaflight quad
+with bidirectional DShot.
 
 
 ## Findings from use (finding-driven intake, INTAKE.md) — 2026-10-04
